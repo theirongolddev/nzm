@@ -65,7 +65,7 @@ var errorPatterns = []ErrorPattern{
 	{Type: ErrorCrash, Literal: "Traceback (most recent", Description: "Python traceback"},
 	{Type: ErrorCrash, Regex: regexp.MustCompile(`(?i)unhandled (exception|error|rejection)`), Description: "Unhandled exception"},
 	{Type: ErrorCrash, Regex: regexp.MustCompile(`(?i)stack trace:`), Description: "Stack trace"},
-	{Type: ErrorCrash, Regex: regexp.MustCompile(`at \S+:\d+:\d+`), Description: "JS stack frame"},
+	{Type: ErrorCrash, Regex: regexp.MustCompile(`at [A-Za-z_./\\]\S*:\d+:\d+`), Description: "JS stack frame"},
 
 	// Generic errors (lowest priority - catch-all)
 	{Type: ErrorGeneric, Regex: regexp.MustCompile(`(?i)^error:`), Description: "Error prefix"},

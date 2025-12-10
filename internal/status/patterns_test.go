@@ -302,6 +302,12 @@ func TestDetectIdleFromOutput_MultipleLines(t *testing.T) {
 			agentType: "cc",
 			expected:  false, // Beyond the 3 line check window
 		},
+		{
+			name:      "prompt as last line after work output",
+			output:    "exec /bin/bash --norc --noprofile\necho BASH_READY\nPS1='$ '; echo IDLE_MARKER\nIDLE_MARKER\n$",
+			agentType: "user",
+			expected:  true,
+		},
 	}
 
 	for _, tt := range tests {
