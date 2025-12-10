@@ -319,6 +319,8 @@ func getGraphMetrics() *GraphMetrics {
 			metrics.HealthStatus = "warning"
 		case bv.DriftCritical:
 			metrics.HealthStatus = "critical"
+		case bv.DriftNoBaseline:
+			metrics.HealthStatus = "unknown"
 		default:
 			metrics.HealthStatus = "unknown"
 		}

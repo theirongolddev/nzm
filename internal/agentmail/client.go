@@ -283,7 +283,7 @@ func (c *Client) httpBaseURL() string {
 		return base[:len(base)-4]
 	}
 	// Remove trailing slash
-	if len(base) > 0 && base[len(base)-1] == '/' {
+	if base != "" && base[len(base)-1] == '/' {
 		return base[:len(base)-1]
 	}
 	return base
@@ -307,14 +307,16 @@ func ProjectSlugFromPath(path string) string {
 	result := make([]byte, 0, len(slug))
 	for i := 0; i < len(slug); i++ {
 		ch := slug[i]
-		if ch >= 'A' && ch <= 'Z' {
+		switch {
+		case ch >= 'A' && ch <= 'Z':
 			result = append(result, ch+32) // lowercase
-		} else if (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '-' || ch == '_' {
+		case (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '-' || ch == '_':
 			result = append(result, ch)
-		} else if ch == ' ' {
+		case ch == ' ':
 			result = append(result, '_')
+		default:
+			// Skip other characters
 		}
-		// Skip other characters
 	}
 	return string(result)
 }

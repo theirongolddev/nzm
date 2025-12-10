@@ -31,7 +31,7 @@ func NewDebouncer(duration time.Duration) *Debouncer {
 
 // Trigger schedules the callback to be called after the debounce duration.
 // If Trigger is called again before the duration elapses, the previous
-// scheduled callback is cancelled and a new one is scheduled.
+// scheduled callback is canceled and a new one is scheduled.
 func (d *Debouncer) Trigger(callback func()) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
