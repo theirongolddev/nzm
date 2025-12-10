@@ -1114,3 +1114,167 @@ func TestPrintSendEmptySession(t *testing.T) {
 		t.Error("Expected failure for empty session")
 	}
 }
+
+// ====================
+// Test more status variations
+// ====================
+
+func TestSystemInfoMarshal(t *testing.T) {
+	info := SystemInfo{
+		Version:   "1.0.0",
+		Commit:    "abc123",
+		BuildDate: "2025-01-01",
+		GoVersion: "go1.21.0",
+		OS:        "darwin",
+		Arch:      "arm64",
+		TmuxOK:    true,
+	}
+
+	data, err := json.Marshal(info)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+
+	if !strings.Contains(string(data), "tmux_available") {
+		t.Error("JSON should contain tmux_available field")
+	}
+}
+
+func TestStatusSummaryMarshal(t *testing.T) {
+	summary := StatusSummary{
+		TotalSessions: 5,
+		TotalAgents:   10,
+		AttachedCount: 2,
+		ClaudeCount:   4,
+		CodexCount:    3,
+		GeminiCount:   2,
+		CursorCount:   1,
+		WindsurfCount: 0,
+		AiderCount:    0,
+	}
+
+	data, err := json.Marshal(summary)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+
+	var result StatusSummary
+	if err := json.Unmarshal(data, &result); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+
+	if result.TotalAgents != 10 {
+		t.Errorf("TotalAgents = %d, want 10", result.TotalAgents)
+	}
+	if result.ClaudeCount != 4 {
+		t.Errorf("ClaudeCount = %d, want 4", result.ClaudeCount)
+	}
+}
+
+func TestBeadsSummaryMarshal(t *testing.T) {
+	summary := BeadsSummary{
+		Open:       10,
+		InProgress: 3,
+		Blocked:    2,
+		Ready:      5,
+	}
+
+	data, err := json.Marshal(summary)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+
+	var result BeadsSummary
+	if err := json.Unmarshal(data, &result); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+
+	if result.Open != 10 {
+		t.Errorf("Open = %d, want 10", result.Open)
+	}
+	if result.Ready != 5 {
+		t.Errorf("Ready = %d, want 5", result.Ready)
+	}
+}
+
+func TestSnapshotAgentMarshal(t *testing.T) {
+	currentBead := "ntm-123"
+	agent := SnapshotAgent{
+		Pane:             "0.1",
+		Type:             "claude",
+		State:            "active",
+		LastOutputAgeSec: 30,
+		OutputTailLines:  20,
+		CurrentBead:      &currentBead,
+		PendingMail:      2,
+	}
+
+	data, err := json.Marshal(agent)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+
+	var result SnapshotAgent
+	if err := json.Unmarshal(data, &result); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+
+	if result.PendingMail != 2 {
+		t.Errorf("PendingMail = %d, want 2", result.PendingMail)
+	}
+	if result.CurrentBead == nil || *result.CurrentBead != "ntm-123" {
+		t.Error("CurrentBead not correctly marshaled")
+	}
+}
+
+func TestSendErrorMarshal(t *testing.T) {
+	err := SendError{
+		Pane:  "3",
+		Error: "pane not found",
+	}
+
+	data, errMarshal := json.Marshal(err)
+	if errMarshal != nil {
+		t.Fatalf("Marshal failed: %v", errMarshal)
+	}
+
+	var result SendError
+	if errUnmarshal := json.Unmarshal(data, &result); errUnmarshal != nil {
+		t.Fatalf("Unmarshal failed: %v", errUnmarshal)
+	}
+
+	if result.Pane != "3" {
+		t.Errorf("Pane = %s, want 3", result.Pane)
+	}
+	if result.Error != "pane not found" {
+		t.Errorf("Error = %s, want 'pane not found'", result.Error)
+	}
+}
+
+func TestSnapshotSessionMarshal(t *testing.T) {
+	session := SnapshotSession{
+		Name:     "myproject",
+		Attached: true,
+		Agents: []SnapshotAgent{
+			{Pane: "0.0", Type: "user", State: "idle"},
+			{Pane: "0.1", Type: "claude", State: "active"},
+		},
+	}
+
+	data, err := json.Marshal(session)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+
+	var result SnapshotSession
+	if err := json.Unmarshal(data, &result); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+
+	if len(result.Agents) != 2 {
+		t.Errorf("Agents count = %d, want 2", len(result.Agents))
+	}
+	if !result.Attached {
+		t.Error("Attached should be true")
+	}
+}

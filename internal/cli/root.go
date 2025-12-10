@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/config"
 	"github.com/Dicklesworthstone/ntm/internal/output"
@@ -84,7 +85,19 @@ Shell Integration:
 			return
 		}
 		if robotSnapshot {
-			if err := robot.PrintSnapshot(); err != nil {
+			var err error
+			if robotSince != "" {
+				// Parse the since timestamp
+				sinceTime, parseErr := time.Parse(time.RFC3339, robotSince)
+				if parseErr != nil {
+					fmt.Fprintf(os.Stderr, "Error: invalid --since timestamp (expected ISO8601/RFC3339 format): %v\n", parseErr)
+					os.Exit(1)
+				}
+				err = robot.PrintSnapshotDelta(sinceTime)
+			} else {
+				err = robot.PrintSnapshot()
+			}
+			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
 			}
@@ -181,6 +194,7 @@ func init() {
 	rootCmd.Flags().BoolVar(&robotVersion, "robot-version", false, "Output version info as JSON")
 	rootCmd.Flags().BoolVar(&robotPlan, "robot-plan", false, "Output execution plan as JSON for AI agents")
 	rootCmd.Flags().BoolVar(&robotSnapshot, "robot-snapshot", false, "Output unified system state snapshot (JSON)")
+	rootCmd.Flags().StringVar(&robotSince, "since", "", "ISO8601 timestamp for delta snapshot (used with --robot-snapshot)")
 	rootCmd.Flags().StringVar(&robotTail, "robot-tail", "", "Tail pane output for session (JSON)")
 	rootCmd.Flags().IntVar(&robotLines, "lines", 20, "Number of lines to capture (used with --robot-tail)")
 	rootCmd.Flags().StringVar(&robotPanes, "panes", "", "Comma-separated pane indices to filter (used with --robot-tail/--robot-send)")

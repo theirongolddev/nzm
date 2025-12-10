@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/tracker"
 )
 
 // Build info - these will be set by the caller from cli package
@@ -21,6 +22,9 @@ var (
 	Date    = "unknown"
 	BuiltBy = "unknown"
 )
+
+// Global state tracker for delta snapshots
+var stateTracker = tracker.New()
 
 // SessionInfo contains machine-readable session information
 type SessionInfo struct {
@@ -648,9 +652,19 @@ func PrintSnapshot() error {
 		}
 
 		for _, pane := range panes {
+			// Capture output for state detection and enhanced type detection
+			captured := ""
+			capturedErr := error(nil)
+			captured, capturedErr = tmux.CapturePaneOutput(pane.ID, 50)
+
+			// Use enhanced agent type detection
+			detection := DetectAgentTypeEnhanced(pane, captured)
+
 			agent := SnapshotAgent{
 				Pane:             fmt.Sprintf("%d.%d", 0, pane.Index),
-				Type:             agentTypeString(pane.Type),
+				Type:             detection.Type,
+				TypeConfidence:   detection.Confidence,
+				TypeMethod:       string(detection.Method),
 				State:            "unknown",
 				LastOutputAgeSec: -1, // Unknown without pane_last_activity
 				OutputTailLines:  0,
@@ -658,9 +672,8 @@ func PrintSnapshot() error {
 				PendingMail:      0,
 			}
 
-			// Capture some output to determine state
-			captured, err := tmux.CapturePaneOutput(pane.ID, 20)
-			if err == nil {
+			// Process captured output for state
+			if capturedErr == nil {
 				lines := splitLines(stripANSI(captured))
 				agent.OutputTailLines = len(lines)
 				agent.State = detectState(lines, pane.Title)
@@ -883,4 +896,36 @@ func truncateMessage(msg string) string {
 		return msg[:47] + "..."
 	}
 	return msg
+}
+
+// SnapshotDeltaOutput provides changes since a given timestamp.
+type SnapshotDeltaOutput struct {
+	Timestamp string   `json:"ts"`
+	Since     string   `json:"since"`
+	Changes   []Change `json:"changes"`
+}
+
+// Change represents a state change event.
+type Change struct {
+	Type    string                 `json:"type"`
+	Session string                 `json:"session,omitempty"`
+	Pane    string                 `json:"pane,omitempty"`
+	Data    map[string]interface{} `json:"data,omitempty"`
+}
+
+// PrintSnapshotDelta outputs changes since the given timestamp.
+// NOTE: This is a stub implementation. Full delta tracking requires
+// a state change ring buffer (ntm-hat) which is not yet implemented.
+func PrintSnapshotDelta(since time.Time) error {
+	output := SnapshotDeltaOutput{
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Since:     since.Format(time.RFC3339),
+		Changes:   []Change{},
+	}
+
+	// TODO: Once ntm-hat (state change ring buffer) is implemented,
+	// this should query the ring buffer for changes since the given timestamp.
+	// For now, return empty changes (indicating no tracking yet).
+
+	return encodeJSON(output)
 }
