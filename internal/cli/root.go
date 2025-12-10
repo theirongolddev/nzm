@@ -414,6 +414,9 @@ func init() {
 		newLockCmd(),
 		newUnlockCmd(),
 		newLocksCmd(),
+
+		// Git coordination
+		newGitCmd(),
 	)
 }
 
