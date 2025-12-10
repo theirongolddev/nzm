@@ -2,6 +2,7 @@
 package health
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 	"time"
@@ -55,6 +56,8 @@ type AgentHealth struct {
 	LastActivity  *time.Time    `json:"last_activity"`   // Last activity timestamp
 	IdleSeconds   int           `json:"idle_seconds"`    // Seconds since last activity
 	Issues        []Issue       `json:"issues"`          // Detected issues
+	RateLimited   bool          `json:"rate_limited"`    // True if agent hit rate limit
+	WaitSeconds   int           `json:"wait_seconds"`    // Suggested wait time (if rate limited)
 }
 
 // SessionHealth contains health information for an entire session
@@ -178,6 +181,12 @@ func checkAgent(pa tmux.PaneActivity) AgentHealth {
 	// Check for error patterns
 	agent.Issues = detectErrors(output)
 
+	// Check for rate limit and parse wait time
+	if hasRateLimitIssue(agent.Issues) {
+		agent.RateLimited = true
+		agent.WaitSeconds = parseWaitTime(output)
+	}
+
 	// Determine activity level
 	agent.Activity = detectActivity(output, pa.LastActivity, pa.Pane.Title)
 
@@ -225,6 +234,39 @@ func detectErrors(output string) []Issue {
 	}
 
 	return issues
+}
+
+// waitTimePatterns for extracting suggested wait times from rate limit messages
+var waitTimePatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)try\s+again\s+in\s+(\d+)\s*s`),              // "try again in 60s"
+	regexp.MustCompile(`(?i)wait\s+(\d+)\s*(?:second|sec|s)`),          // "wait 60 seconds"
+	regexp.MustCompile(`(?i)retry\s+(?:after|in)\s+(\d+)\s*(?:s|sec)`), // "retry after 30s"
+	regexp.MustCompile(`(?i)(\d+)\s*(?:second|sec)s?\s+(?:cooldown|delay|wait)`), // "60 second cooldown"
+	regexp.MustCompile(`(?i)rate.?limit.*?(\d+)\s*s`),                  // "rate limit exceeded, 60s"
+}
+
+// parseWaitTime extracts the suggested wait time in seconds from rate limit messages
+// Returns 0 if no wait time is found
+func parseWaitTime(output string) int {
+	for _, pattern := range waitTimePatterns {
+		if matches := pattern.FindStringSubmatch(output); len(matches) > 1 {
+			var seconds int
+			if _, err := fmt.Sscanf(matches[1], "%d", &seconds); err == nil && seconds > 0 {
+				return seconds
+			}
+		}
+	}
+	return 0
+}
+
+// hasRateLimitIssue checks if any issue indicates a rate limit
+func hasRateLimitIssue(issues []Issue) bool {
+	for _, issue := range issues {
+		if issue.Type == "rate_limit" {
+			return true
+		}
+	}
+	return false
 }
 
 // detectActivity determines the activity level of an agent
