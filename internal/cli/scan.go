@@ -122,13 +122,40 @@ func runScan(path string, opts scanner.ScanOptions) error {
 		return fmt.Errorf("scan failed: %w", err)
 	}
 
+	// TODO: Beads bridge integration (ntm-dv1c)
+	// Run beads bridge if requested
+	var bridgeResult *scanner.BridgeResult
+	var updateResult *scanner.BridgeResult
+	_ = bridgeResult // Suppress unused warning until beads bridge is implemented
+	_ = updateResult // Suppress unused warning until beads bridge is implemented
+	// Beads bridge features disabled pending ntm-dv1c implementation
+	// if createBeads && len(result.Findings) > 0 { ... }
+	// if updateBeads { ... }
+
 	// Output results
 	if jsonOutput {
-		return json.NewEncoder(os.Stdout).Encode(result)
+		output := map[string]interface{}{
+			"scan": result,
+		}
+		if bridgeResult != nil {
+			output["beads_created"] = bridgeResult
+		}
+		if updateResult != nil {
+			output["beads_updated"] = updateResult
+		}
+		return json.NewEncoder(os.Stdout).Encode(output)
 	}
 
 	// Text output
 	printScanResults(t, result, opts.FailOnWarning)
+
+	// Print beads bridge results
+	if bridgeResult != nil {
+		printBeadsBridgeResults(t, bridgeResult, bridgeCfg.DryRun)
+	}
+	if updateResult != nil {
+		printBeadsUpdateResults(t, updateResult, bridgeCfg.DryRun)
+	}
 
 	// Exit with error if requested and issues found
 	if opts.FailOnWarning && result.HasWarning() {
