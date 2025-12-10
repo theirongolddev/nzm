@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/Dicklesworthstone/ntm/internal/agentmail"
+	"github.com/Dicklesworthstone/ntm/internal/output"
 	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
 	"github.com/spf13/cobra"
 )
@@ -32,9 +33,10 @@ Also checks for recommended tools like fzf.
 
 Examples:
   ntm deps           # Quick check
-  ntm deps -v        # Verbose output with versions`,
-		Run: func(cmd *cobra.Command, args []string) {
-			runDeps(verbose)
+  ntm deps -v        # Verbose output with versions
+  ntm deps --json    # JSON output for scripts`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runDeps(verbose)
 		},
 	}
 
@@ -52,9 +54,7 @@ type depCheck struct {
 	InstallHint string
 }
 
-func runDeps(verbose bool) {
-	t := theme.Current()
-
+func runDeps(verbose bool) error {
 	deps := []depCheck{
 		// Required
 		{
@@ -111,15 +111,60 @@ func runDeps(verbose bool) {
 		},
 	}
 
+	// Collect all dependency statuses
+	var depResults []output.DependencyCheck
+	missingRequired := false
+	agentsAvailable := 0
+
+	for _, dep := range deps {
+		status, version, path := checkDepWithPath(dep)
+		installed := status == "found"
+
+		if !installed && dep.Required {
+			missingRequired = true
+		}
+		if installed && dep.Category == "AI Agents" {
+			agentsAvailable++
+		}
+
+		depResults = append(depResults, output.DependencyCheck{
+			Name:      dep.Name,
+			Required:  dep.Required,
+			Installed: installed,
+			Version:   version,
+			Path:      path,
+		})
+	}
+
+	// Add Agent Mail as a service check
+	client := agentmail.NewClient()
+	agentMailAvailable := client.IsAvailable()
+	depResults = append(depResults, output.DependencyCheck{
+		Name:      "Agent Mail",
+		Required:  false,
+		Installed: agentMailAvailable,
+		Path:      agentmail.DefaultBaseURL,
+	})
+
+	// JSON output mode
+	if IsJSONOutput() {
+		response := output.DepsResponse{
+			TimestampedResponse: output.NewTimestamped(),
+			AllInstalled:        !missingRequired,
+			Dependencies:        depResults,
+		}
+		return output.PrintJSON(response)
+	}
+
+	// Text output mode
+	t := theme.Current()
+
 	// Group by category
 	categories := []string{"Required", "AI Agents", "Recommended"}
 	byCategory := make(map[string][]depCheck)
 	for _, d := range deps {
 		byCategory[d.Category] = append(byCategory[d.Category], d)
 	}
-
-	missingRequired := false
-	agentsAvailable := 0
 
 	fmt.Println()
 	fmt.Printf("%s NTM Dependency Check%s\n", "\033[1m", "\033[0m")
@@ -134,21 +179,17 @@ func runDeps(verbose bool) {
 		fmt.Printf("%s%s:%s\n\n", "\033[1m", cat, "\033[0m")
 
 		for _, dep := range items {
-			status, version := checkDep(dep)
+			status, version, _ := checkDepWithPath(dep)
 
 			var statusIcon, statusColor string
 			switch status {
 			case "found":
 				statusIcon = "✓"
 				statusColor = colorize(t.Success)
-				if dep.Category == "AI Agents" {
-					agentsAvailable++
-				}
 			case "not found":
 				statusIcon = "✗"
 				if dep.Required {
 					statusColor = colorize(t.Error)
-					missingRequired = true
 				} else {
 					statusColor = colorize(t.Warning)
 				}
@@ -198,6 +239,7 @@ func runDeps(verbose bool) {
 	}
 
 	fmt.Println()
+	return nil
 }
 
 // checkAgentMail checks Agent Mail server availability
@@ -219,24 +261,31 @@ func checkAgentMail(t theme.Theme, verbose bool) {
 	}
 }
 
-func checkDep(dep depCheck) (status string, version string) {
+// checkDepWithPath checks if a dependency is installed and returns its status, version, and path
+func checkDepWithPath(dep depCheck) (status string, version string, path string) {
 	// Check if command exists
-	path, err := exec.LookPath(dep.Command)
+	foundPath, err := exec.LookPath(dep.Command)
 	if err != nil {
-		return "not found", ""
+		return "not found", "", ""
 	}
 
-	_ = path // We found it
+	path = foundPath
 
 	// Get version if possible
 	if len(dep.VersionArgs) > 0 {
 		cmd := exec.Command(dep.Command, dep.VersionArgs...)
-		output, err := cmd.CombinedOutput()
+		out, err := cmd.CombinedOutput()
 		if err != nil {
-			return "found", ""
+			return "found", "", path
 		}
-		return "found", strings.TrimSpace(string(output))
+		return "found", strings.TrimSpace(string(out)), path
 	}
 
-	return "found", ""
+	return "found", "", path
+}
+
+// checkDep is a compatibility wrapper (deprecated, use checkDepWithPath)
+func checkDep(dep depCheck) (status string, version string) {
+	s, v, _ := checkDepWithPath(dep)
+	return s, v
 }

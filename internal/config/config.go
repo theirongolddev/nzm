@@ -36,13 +36,13 @@ func (c *Config) GenerateAgentCommand(tmplStr string, vars AgentTemplateVars) (s
 
 // Config represents the main configuration
 type Config struct {
-	ProjectsBase string            `toml:"projects_base"`
-	PaletteFile  string            `toml:"palette_file"` // Path to command_palette.md (optional)
-	Agents       AgentConfig       `toml:"agents"`
-	Palette      []PaletteCmd      `toml:"palette"`
-	Tmux         TmuxConfig        `toml:"tmux"`
-	AgentMail    AgentMailConfig   `toml:"agent_mail"`
-	Models       ModelsConfig      `toml:"models"`
+	ProjectsBase  string            `toml:"projects_base"`
+	PaletteFile   string            `toml:"palette_file"` // Path to command_palette.md (optional)
+	Agents        AgentConfig       `toml:"agents"`
+	Palette       []PaletteCmd      `toml:"palette"`
+	Tmux          TmuxConfig        `toml:"tmux"`
+	AgentMail     AgentMailConfig   `toml:"agent_mail"`
+	Models        ModelsConfig      `toml:"models"`
 	Alerts        AlertsConfig      `toml:"alerts"`
 	Checkpoints   CheckpointsConfig `toml:"checkpoints"`
 	Notifications notify.Config     `toml:"notifications"`
@@ -792,7 +792,12 @@ func Print(cfg *Config, w io.Writer) error {
 	fmt.Fprintln(w, "[notifications]")
 	fmt.Fprintln(w, "# Notification system for agent events (errors, crashes, rate limits)")
 	fmt.Fprintf(w, "enabled = %t\n", cfg.Notifications.Enabled)
-	fmt.Fprintf(w, "events = %q  # Events to notify on\n", cfg.Notifications.Events)
+	// Serialize events as TOML array for validity
+	eventItems := make([]string, 0, len(cfg.Notifications.Events))
+	for _, e := range cfg.Notifications.Events {
+		eventItems = append(eventItems, fmt.Sprintf("\"%s\"", e))
+	}
+	fmt.Fprintf(w, "events = [%s]  # Events to notify on\n", strings.Join(eventItems, ", "))
 	fmt.Fprintln(w)
 
 	fmt.Fprintln(w, "[notifications.desktop]")

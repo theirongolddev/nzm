@@ -12,6 +12,7 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/hooks"
 	"github.com/Dicklesworthstone/ntm/internal/output"
 	"github.com/Dicklesworthstone/ntm/internal/recipe"
+	"github.com/Dicklesworthstone/ntm/internal/resilience"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
 	"github.com/spf13/cobra"
 )
@@ -20,6 +21,7 @@ func newSpawnCmd() *cobra.Command {
 	var noUserPane bool
 	var recipeName string
 	var agentSpecs AgentSpecs
+	var autoRestart bool
 
 	cmd := &cobra.Command{
 		Use:   "spawn <session-name>",
@@ -38,12 +40,20 @@ Multiple flags of the same type accumulate.
 Built-in recipes: quick-claude, full-stack, minimal, codex-heavy, balanced, review-team
 Use 'ntm recipes list' to see all available recipes.
 
+Auto-restart mode (--auto-restart):
+  Monitors agent health and automatically restarts crashed agents.
+  Configure via [resilience] section in config.toml:
+    max_restarts = 3         # Max restart attempts per agent
+    restart_delay_seconds = 30  # Delay before restart
+    health_check_seconds = 10   # Health check interval
+
 Examples:
   ntm spawn myproject --cc=2 --cod=2           # 2 Claude, 2 Codex + user pane
   ntm spawn myproject --cc=3 --cod=3 --gmi=1   # 3 Claude, 3 Codex, 1 Gemini
   ntm spawn myproject --cc=4 --no-user         # 4 Claude, no user pane
   ntm spawn myproject -r full-stack            # Use full-stack recipe
-  ntm spawn myproject --cc=2:opus --cc=1:sonnet  # 2 Opus + 1 Sonnet`,
+  ntm spawn myproject --cc=2:opus --cc=1:sonnet  # 2 Opus + 1 Sonnet
+  ntm spawn myproject --cc=2 --auto-restart    # With auto-restart enabled`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// If a recipe is specified, load it and use its agent counts
@@ -82,7 +92,7 @@ Examples:
 			codCount := agentSpecs.ByType(AgentTypeCodex).TotalCount()
 			gmiCount := agentSpecs.ByType(AgentTypeGemini).TotalCount()
 
-			return runSpawnWithSpecs(args[0], agentSpecs, ccCount, codCount, gmiCount, !noUserPane)
+			return runSpawnWithSpecs(args[0], agentSpecs, ccCount, codCount, gmiCount, !noUserPane, autoRestart)
 		},
 	}
 
@@ -92,19 +102,25 @@ Examples:
 	cmd.Flags().Var(NewAgentSpecsValue(AgentTypeGemini, &agentSpecs), "gmi", "Gemini agents (N or N:model)")
 	cmd.Flags().BoolVar(&noUserPane, "no-user", false, "don't reserve a pane for the user")
 	cmd.Flags().StringVarP(&recipeName, "recipe", "r", "", "use a recipe for agent configuration")
+	cmd.Flags().BoolVar(&autoRestart, "auto-restart", false, "monitor and auto-restart crashed agents")
 
 	return cmd
 }
 
 // runSpawnWithSpecs handles agent specs with model-specific pane naming
-func runSpawnWithSpecs(session string, specs AgentSpecs, ccCount, codCount, gmiCount int, userPane bool) error {
+func runSpawnWithSpecs(session string, specs AgentSpecs, ccCount, codCount, gmiCount int, userPane, autoRestart bool) error {
 	// Flatten specs to get individual agents with their models
 	agents := specs.Flatten()
-	return runSpawnAgents(session, agents, ccCount, codCount, gmiCount, userPane)
+	return runSpawnAgentsWithRestart(session, agents, ccCount, codCount, gmiCount, userPane, autoRestart)
 }
 
-// runSpawnAgents launches agents with model-specific pane naming
+// Backward-compatible helper (no auto-restart)
 func runSpawnAgents(session string, agents []FlatAgent, ccCount, codCount, gmiCount int, userPane bool) error {
+	return runSpawnAgentsWithRestart(session, agents, ccCount, codCount, gmiCount, userPane, false)
+}
+
+// runSpawnAgentsWithRestart launches agents with model-specific pane naming and optional auto-restart
+func runSpawnAgentsWithRestart(session string, agents []FlatAgent, ccCount, codCount, gmiCount int, userPane, autoRestart bool) error {
 	// Helper for JSON error output
 	outputError := func(err error) error {
 		if IsJSONOutput() {
@@ -243,6 +259,16 @@ func runSpawnAgents(session string, agents []FlatAgent, ccCount, codCount, gmiCo
 		fmt.Printf("Launching agents: %dx cc, %dx cod, %dx gmi...\n", ccCount, codCount, gmiCount)
 	}
 
+	// Track launched agents for resilience monitor
+	type launchedAgent struct {
+		paneID    string
+		paneIndex int
+		agentType string
+		model     string
+		command   string
+	}
+	var launchedAgents []launchedAgent
+
 	// Launch agents using flattened specs (preserves model info for pane naming)
 	for _, agent := range agents {
 		if agentNum >= len(panes) {
@@ -290,6 +316,16 @@ func runSpawnAgents(session string, agents []FlatAgent, ccCount, codCount, gmiCo
 		if err := tmux.SendKeys(pane.ID, cmd, true); err != nil {
 			return outputError(fmt.Errorf("launching %s agent: %w", agent.Type, err))
 		}
+
+		// Track for resilience monitor
+		launchedAgents = append(launchedAgents, launchedAgent{
+			paneID:    pane.ID,
+			paneIndex: pane.Index,
+			agentType: string(agent.Type),
+			model:     agent.Model,
+			command:   agentCmd,
+		})
+
 		agentNum++
 	}
 
@@ -368,6 +404,20 @@ func runSpawnAgents(session string, agents []FlatAgent, ccCount, codCount, gmiCo
 			success, _, _ := hooks.CountResults(results)
 			fmt.Printf("✓ %d post-spawn hook(s) completed\n", success)
 		}
+	}
+
+	// Start resilience monitor if auto-restart is enabled
+	if autoRestart || cfg.Resilience.AutoRestart {
+		monitor := resilience.NewMonitor(session, dir, cfg)
+		for _, agent := range launchedAgents {
+			monitor.RegisterAgent(agent.paneID, agent.paneIndex, agent.agentType, agent.model, agent.command)
+		}
+		monitor.Start(context.Background())
+		if !IsJSONOutput() {
+			fmt.Printf("✓ Auto-restart enabled (health check every %ds, max %d restarts)\n",
+				cfg.Resilience.HealthCheckSeconds, cfg.Resilience.MaxRestarts)
+		}
+		// Note: monitor runs in background, will continue until tmux session ends
 	}
 
 	// Register session as Agent Mail agent (non-blocking)

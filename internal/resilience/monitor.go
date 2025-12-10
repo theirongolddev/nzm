@@ -1,0 +1,278 @@
+// Package resilience provides auto-restart and recovery functionality for agents.
+package resilience
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"sync"
+	"time"
+
+	"github.com/Dicklesworthstone/ntm/internal/config"
+	"github.com/Dicklesworthstone/ntm/internal/health"
+	"github.com/Dicklesworthstone/ntm/internal/notify"
+	"github.com/Dicklesworthstone/ntm/internal/tmux"
+)
+
+// AgentState tracks the state of an individual agent for restart purposes
+type AgentState struct {
+	PaneID       string
+	PaneIndex    int
+	AgentType    string // cc, cod, gmi
+	Model        string // Model variant (opus, sonnet, etc.)
+	Command      string // Original launch command
+	RestartCount int
+	LastCrash    time.Time
+	Healthy      bool
+}
+
+// Monitor watches agent health and handles auto-restart
+type Monitor struct {
+	session    string
+	projectDir string
+	cfg        *config.Config
+	notifier   *notify.Notifier
+
+	mu     sync.RWMutex
+	agents map[string]*AgentState // keyed by pane ID
+	cancel context.CancelFunc
+	done   chan struct{}
+}
+
+// NewMonitor creates a new resilience monitor for a session
+func NewMonitor(session, projectDir string, cfg *config.Config) *Monitor {
+	var notifier *notify.Notifier
+	if cfg.Notifications.Enabled {
+		notifier = notify.New(cfg.Notifications)
+	}
+
+	return &Monitor{
+		session:    session,
+		projectDir: projectDir,
+		cfg:        cfg,
+		notifier:   notifier,
+		agents:     make(map[string]*AgentState),
+		done:       make(chan struct{}),
+	}
+}
+
+// RegisterAgent adds an agent to be monitored
+func (m *Monitor) RegisterAgent(paneID string, paneIndex int, agentType, model, command string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.agents[paneID] = &AgentState{
+		PaneID:    paneID,
+		PaneIndex: paneIndex,
+		AgentType: agentType,
+		Model:     model,
+		Command:   command,
+		Healthy:   true,
+	}
+}
+
+// Start begins monitoring agent health in the background
+func (m *Monitor) Start(ctx context.Context) {
+	ctx, m.cancel = context.WithCancel(ctx)
+
+	go m.monitorLoop(ctx)
+}
+
+// Stop stops the monitor gracefully
+func (m *Monitor) Stop() {
+	if m.cancel != nil {
+		m.cancel()
+	}
+	<-m.done
+}
+
+// GetRestartCount returns the number of restarts for an agent
+func (m *Monitor) GetRestartCount(paneID string) int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if agent, ok := m.agents[paneID]; ok {
+		return agent.RestartCount
+	}
+	return 0
+}
+
+// GetAgentStates returns a copy of all agent states
+func (m *Monitor) GetAgentStates() map[string]AgentState {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	states := make(map[string]AgentState, len(m.agents))
+	for id, agent := range m.agents {
+		states[id] = *agent
+	}
+	return states
+}
+
+// monitorLoop is the main health check loop
+func (m *Monitor) monitorLoop(ctx context.Context) {
+	defer close(m.done)
+
+	checkInterval := time.Duration(m.cfg.Resilience.HealthCheckSeconds) * time.Second
+	if checkInterval < time.Second {
+		checkInterval = 10 * time.Second // Minimum 10 seconds
+	}
+
+	ticker := time.NewTicker(checkInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			m.checkHealth()
+		}
+	}
+}
+
+// checkHealth performs a health check on all monitored agents
+func (m *Monitor) checkHealth() {
+	// Get health status for the session
+	sessionHealth, err := health.CheckSession(m.session)
+	if err != nil {
+		log.Printf("[resilience] health check failed: %v", err)
+		return
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Build a map of pane health by pane ID
+	healthByPaneID := make(map[string]*health.AgentHealth)
+	for i := range sessionHealth.Agents {
+		agent := &sessionHealth.Agents[i]
+		healthByPaneID[agent.PaneID] = agent
+	}
+
+	// Check each monitored agent
+	for paneID, agentState := range m.agents {
+		agentHealth, exists := healthByPaneID[paneID]
+
+		// If pane doesn't exist anymore, agent crashed hard
+		if !exists {
+			if agentState.Healthy {
+				m.handleCrash(agentState, "Pane no longer exists")
+			}
+			continue
+		}
+
+		// Check for error status or process exit
+		if agentHealth.Status == health.StatusError ||
+			agentHealth.ProcessStatus == health.ProcessExited {
+
+			if agentState.Healthy {
+				reason := "Agent unhealthy"
+				if len(agentHealth.Issues) > 0 {
+					reason = agentHealth.Issues[0].Message
+				}
+				m.handleCrash(agentState, reason)
+			}
+		} else {
+			// Agent is healthy again
+			agentState.Healthy = true
+		}
+	}
+}
+
+// handleCrash processes a detected agent crash
+func (m *Monitor) handleCrash(agent *AgentState, reason string) {
+	agent.Healthy = false
+	agent.LastCrash = time.Now()
+
+	log.Printf("[resilience] Agent %s (pane %d, type %s) crashed: %s",
+		agent.PaneID, agent.PaneIndex, agent.AgentType, reason)
+
+	// Send crash notification if enabled
+	if m.cfg.Resilience.NotifyOnCrash && m.notifier != nil {
+		event := notify.NewAgentCrashedEvent(m.session, agent.PaneID, agent.AgentType)
+		event.Message = fmt.Sprintf("Agent %s crashed: %s", agent.AgentType, reason)
+		if err := m.notifier.Notify(event); err != nil {
+			log.Printf("[resilience] notification error: %v", err)
+		}
+	}
+
+	// Attempt restart if under the limit
+	if agent.RestartCount >= m.cfg.Resilience.MaxRestarts {
+		log.Printf("[resilience] Agent %s exceeded max restarts (%d), not restarting",
+			agent.PaneID, m.cfg.Resilience.MaxRestarts)
+
+		// Send max restarts notification
+		if m.cfg.Resilience.NotifyOnMaxRestarts && m.notifier != nil {
+			event := notify.Event{
+				Type:    notify.EventAgentError,
+				Session: m.session,
+				Pane:    agent.PaneID,
+				Agent:   agent.AgentType,
+				Message: fmt.Sprintf("Agent %s exceeded max restart attempts (%d)",
+					agent.AgentType, m.cfg.Resilience.MaxRestarts),
+			}
+			if err := m.notifier.Notify(event); err != nil {
+				log.Printf("[resilience] notification error: %v", err)
+			}
+		}
+		return
+	}
+
+	// Schedule restart
+	go m.restartAgent(agent)
+}
+
+// restartAgent restarts a crashed agent after the configured delay
+func (m *Monitor) restartAgent(agent *AgentState) {
+	delay := time.Duration(m.cfg.Resilience.RestartDelaySeconds) * time.Second
+	log.Printf("[resilience] Restarting agent %s in %v...", agent.PaneID, delay)
+
+	time.Sleep(delay)
+
+	m.mu.Lock()
+	// Check if still in crashed state (could have been stopped)
+	currentAgent, ok := m.agents[agent.PaneID]
+	if !ok || currentAgent.Healthy {
+		m.mu.Unlock()
+		return
+	}
+	currentAgent.RestartCount++
+	m.mu.Unlock()
+
+	// Re-run the agent command in the pane
+	cmd := fmt.Sprintf("cd %q && %s", m.projectDir, agent.Command)
+	if err := tmux.SendKeys(agent.PaneID, cmd, true); err != nil {
+		log.Printf("[resilience] Failed to restart agent %s: %v", agent.PaneID, err)
+		return
+	}
+
+	log.Printf("[resilience] Agent %s restarted (attempt %d/%d)",
+		agent.PaneID, currentAgent.RestartCount, m.cfg.Resilience.MaxRestarts)
+
+	// Send restart notification
+	if m.notifier != nil {
+		event := notify.Event{
+			Type:    notify.EventAgentRestarted,
+			Session: m.session,
+			Pane:    agent.PaneID,
+			Agent:   agent.AgentType,
+			Message: fmt.Sprintf("Agent %s restarted (attempt %d/%d)",
+				agent.AgentType, currentAgent.RestartCount, m.cfg.Resilience.MaxRestarts),
+			Details: map[string]string{
+				"restart_count": fmt.Sprintf("%d", currentAgent.RestartCount),
+				"max_restarts":  fmt.Sprintf("%d", m.cfg.Resilience.MaxRestarts),
+			},
+		}
+		if err := m.notifier.Notify(event); err != nil {
+			log.Printf("[resilience] notification error: %v", err)
+		}
+	}
+
+	// Mark as healthy again (will be rechecked on next health cycle)
+	m.mu.Lock()
+	if a, ok := m.agents[agent.PaneID]; ok {
+		a.Healthy = true
+	}
+	m.mu.Unlock()
+}
