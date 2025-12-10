@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Dicklesworthstone/ntm/internal/status"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
 	"github.com/Dicklesworthstone/ntm/internal/tui/components"
 	"github.com/Dicklesworthstone/ntm/internal/tui/icons"
@@ -42,6 +43,19 @@ type Model struct {
 	// Theme
 	theme theme.Theme
 	icons icons.IconSet
+
+	// Compaction detection and recovery
+	compaction *status.CompactionRecoveryIntegration
+
+	// Per-pane status tracking
+	paneStatus map[int]PaneStatus
+}
+
+// PaneStatus tracks the status of a pane including compaction state
+type PaneStatus struct {
+	LastCompaction *time.Time // When compaction was last detected
+	RecoverySent   bool       // Whether recovery prompt was sent
+	State          string     // "working", "idle", "error", "compacted"
 }
 
 // KeyMap defines dashboard keybindings
@@ -91,11 +105,13 @@ func New(session string) Model {
 	ic := icons.Current()
 
 	return Model{
-		session: session,
-		width:   80,
-		height:  24,
-		theme:   t,
-		icons:   ic,
+		session:    session,
+		width:      80,
+		height:     24,
+		theme:      t,
+		icons:      ic,
+		compaction: status.NewCompactionRecoveryIntegrationDefault(),
+		paneStatus: make(map[int]PaneStatus),
 	}
 }
 
@@ -138,6 +154,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.panes = panes
 			m.updateStats()
+			m.checkCompaction()
 		}
 		return m, nil
 
@@ -217,6 +234,46 @@ func (m *Model) updateStats() {
 		default:
 			m.userCount++
 		}
+	}
+}
+
+// checkCompaction polls pane output and checks for compaction events
+func (m *Model) checkCompaction() {
+	for _, pane := range m.panes {
+		// Skip user panes
+		if pane.Type == tmux.AgentUser {
+			continue
+		}
+
+		// Capture recent output from the pane
+		output, err := tmux.CapturePaneOutput(pane.ID, 50)
+		if err != nil {
+			continue
+		}
+
+		// Determine agent type string for detection
+		agentType := "unknown"
+		switch pane.Type {
+		case tmux.AgentClaude:
+			agentType = "claude"
+		case tmux.AgentCodex:
+			agentType = "codex"
+		case tmux.AgentGemini:
+			agentType = "gemini"
+		}
+
+		// Check for compaction and send recovery if detected
+		event, recoverySent, _ := m.compaction.CheckAndRecover(output, agentType, m.session, pane.Index)
+
+		// Update pane status
+		ps := m.paneStatus[pane.Index]
+		if event != nil {
+			now := time.Now()
+			ps.LastCompaction = &now
+			ps.RecoverySent = recoverySent
+			ps.State = "compacted"
+		}
+		m.paneStatus[pane.Index] = ps
 	}
 }
 
@@ -413,6 +470,17 @@ func (m Model) renderPaneGrid() string {
 				cmd = cmd[:cardWidth-7] + "..."
 			}
 			cardContent.WriteString(cmdStyle.Render(cmd))
+		}
+
+		// Compaction indicator
+		if ps, ok := m.paneStatus[p.Index]; ok && ps.LastCompaction != nil {
+			cardContent.WriteString("\n")
+			compactStyle := lipgloss.NewStyle().Foreground(t.Warning).Bold(true)
+			indicator := "⚠ compacted"
+			if ps.RecoverySent {
+				indicator = "↻ recovering"
+			}
+			cardContent.WriteString(compactStyle.Render(indicator))
 		}
 
 		// Create card box
