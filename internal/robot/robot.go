@@ -15,11 +15,227 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/agentmail"
 	"github.com/Dicklesworthstone/ntm/internal/alerts"
 	"github.com/Dicklesworthstone/ntm/internal/bv"
+	"github.com/Dicklesworthstone/ntm/internal/cass"
 	"github.com/Dicklesworthstone/ntm/internal/config"
 	"github.com/Dicklesworthstone/ntm/internal/recipe"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
 	"github.com/Dicklesworthstone/ntm/internal/tracker"
 )
+
+// ... existing code ...
+
+// CASSStatusOutput represents the output for --robot-cass-status
+type CASSStatusOutput struct {
+	CASSAvailable bool           `json:"cass_available"`
+	Healthy       bool           `json:"healthy"`
+	Index         CASSIndexStats `json:"index"`
+}
+
+// CASSIndexStats holds index statistics
+type CASSIndexStats struct {
+	Exists        bool  `json:"exists"`
+	Fresh         bool  `json:"fresh"`
+	LastIndexedAt int64 `json:"last_indexed_at"`
+	Conversations int64 `json:"conversations"`
+	Messages      int64 `json:"messages"`
+}
+
+// PrintCASSStatus outputs CASS health and stats as JSON
+func PrintCASSStatus() error {
+	client := cass.NewClient()
+	status, err := client.Status(context.Background())
+
+	output := CASSStatusOutput{
+		CASSAvailable: client.IsInstalled(),
+		Healthy:       false,
+		Index:         CASSIndexStats{},
+	}
+
+	if err == nil {
+		output.Healthy = status.Healthy
+		output.Index.Exists = true
+		output.Index.Fresh = status.Index.Healthy
+		output.Index.LastIndexedAt = status.LastIndexedAt.UnixMilli()
+		output.Index.Conversations = status.Conversations
+		output.Index.Messages = status.Messages
+	}
+
+	return encodeJSON(output)
+}
+
+// CASSSearchOutput represents the output for --robot-cass-search
+type CASSSearchOutput struct {
+	Query        string          `json:"query"`
+	Count        int             `json:"count"`
+	TotalMatches int             `json:"total_matches"`
+	Hits         []CASSSearchHit `json:"hits"`
+}
+
+// CASSSearchHit represents a single hit in robot search output
+type CASSSearchHit struct {
+	SourcePath string  `json:"source_path"`
+	Agent      string  `json:"agent"`
+	Title      string  `json:"title"`
+	Score      float64 `json:"score"`
+	Snippet    string  `json:"snippet"`
+	CreatedAt  int64   `json:"created_at"`
+}
+
+// PrintCASSSearch outputs search results as JSON
+func PrintCASSSearch(query, agent, workspace, since string, limit int) error {
+	client := cass.NewClient()
+	resp, err := client.Search(context.Background(), cass.SearchOptions{
+		Query:     query,
+		Agent:     agent,
+		Workspace: workspace,
+		Since:     since,
+		Limit:     limit,
+	})
+
+	if err != nil {
+		return fmt.Errorf("search failed: %w", err)
+	}
+
+	output := CASSSearchOutput{
+		Query:        resp.Query,
+		Count:        resp.Count,
+		TotalMatches: resp.TotalMatches,
+		Hits:         make([]CASSSearchHit, len(resp.Hits)),
+	}
+
+	for i, hit := range resp.Hits {
+		createdAt := int64(0)
+		if hit.CreatedAt != nil {
+			createdAt = *hit.CreatedAt * 1000 // Convert to ms
+		}
+		output.Hits[i] = CASSSearchHit{
+			SourcePath: hit.SourcePath,
+			Agent:      hit.Agent,
+			Title:      hit.Title,
+			Score:      hit.Score,
+			Snippet:    hit.Snippet,
+			CreatedAt:  createdAt,
+		}
+	}
+
+	return encodeJSON(output)
+}
+
+// CASSInsightsOutput represents the output for --robot-cass-insights
+type CASSInsightsOutput struct {
+	Period string                   `json:"period"`
+	Agents map[string]interface{}   `json:"agents"`
+	Topics []map[string]interface{} `json:"topics"`
+	Errors []map[string]interface{} `json:"errors"`
+}
+
+// PrintCASSInsights outputs aggregated insights as JSON
+func PrintCASSInsights() error {
+	client := cass.NewClient()
+	// Get aggregations for the last 7 days by default
+	resp, err := client.Search(context.Background(), cass.SearchOptions{
+		Query: "*",
+		Since: "7d",
+		Limit: 0,
+	})
+
+	if err != nil {
+		return fmt.Errorf("insights failed: %w", err)
+	}
+
+	output := CASSInsightsOutput{
+		Period: "7d",
+		Agents: map[string]interface{}{},
+		Topics: []map[string]interface{}{},
+		Errors: []map[string]interface{}{},
+	}
+
+	if resp.Aggregations != nil {
+		// Convert agent map to buckets list
+		var agentBuckets []map[string]interface{}
+		for k, v := range resp.Aggregations.Agents {
+			agentBuckets = append(agentBuckets, map[string]interface{}{
+				"key":   k,
+				"count": v,
+			})
+		}
+		output.Agents["buckets"] = agentBuckets
+
+		// Convert tags/topics
+		for k, v := range resp.Aggregations.Tags {
+			output.Topics = append(output.Topics, map[string]interface{}{
+				"term":  k,
+				"count": v,
+			})
+		}
+	}
+
+	return encodeJSON(output)
+}
+
+// CASSContextOutput represents output for --robot-cass-context
+type CASSContextOutput struct {
+	Query            string               `json:"query"`
+	RelevantSessions []CASSContextSession `json:"relevant_sessions"`
+	SuggestedContext string               `json:"suggested_context"`
+}
+
+// CASSContextSession represents a session in context output
+type CASSContextSession struct {
+	Summary   string   `json:"summary"`
+	KeyPoints []string `json:"key_points"`
+	Source    string   `json:"source"`
+	Agent     string   `json:"agent"`
+	When      string   `json:"when"`
+}
+
+// PrintCASSContext outputs relevant past context for spawning
+func PrintCASSContext(query string) error {
+	client := cass.NewClient()
+	// Search for relevant sessions
+	resp, err := client.Search(context.Background(), cass.SearchOptions{
+		Query: query,
+		Limit: 3,
+	})
+
+	if err != nil {
+		return fmt.Errorf("context search failed: %w", err)
+	}
+
+	output := CASSContextOutput{
+		Query:            query,
+		RelevantSessions: []CASSContextSession{},
+	}
+
+	var suggestions []string
+
+	for _, hit := range resp.Hits {
+		when := "unknown"
+		if hit.CreatedAt != nil {
+			ts := time.Unix(*hit.CreatedAt, 0)
+			when = ts.Format("2006-01-02")
+		}
+
+		session := CASSContextSession{
+			Summary: hit.Title, // Use title as summary for now
+			Source:  hit.SourcePath,
+			Agent:   hit.Agent,
+			When:    when,
+		}
+		// Extract potential key points from snippet?
+		// For now just empty or placeholder
+		session.KeyPoints = []string{}
+
+		output.RelevantSessions = append(output.RelevantSessions, session)
+		suggestions = append(suggestions, fmt.Sprintf("session '%s' (%s)", hit.Title, hit.Agent))
+	}
+
+	if len(suggestions) > 0 {
+		output.SuggestedContext = fmt.Sprintf("Consider reviewing: %s", strings.Join(suggestions, ", "))
+	}
+
+	return encodeJSON(output)
+}
 
 // Build info - these will be set by the caller from cli package
 var (

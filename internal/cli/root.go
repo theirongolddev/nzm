@@ -153,6 +153,34 @@ Shell Integration:
 			}
 			return
 		}
+		if robotCassStatus {
+			if err := robot.PrintCASSStatus(); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
+		if robotCassSearch != "" {
+			if err := robot.PrintCASSSearch(robotCassSearch, cassAgent, cassWorkspace, cassSince, cassLimit); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
+		if robotCassInsights {
+			if err := robot.PrintCASSInsights(); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
+		if robotCassContext != "" {
+			if err := robot.PrintCASSContext(robotCassContext); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
 		if robotTail != "" {
 			// Parse pane filter
 			var paneFilter []string
@@ -427,6 +455,16 @@ var (
 	// Robot-restore flags for session state restoration
 	robotRestore    string // saved state name to restore
 	robotRestoreDry bool   // dry-run mode
+
+	// Robot-cass flags for CASS integration
+	robotCassStatus   bool   // CASS health check
+	robotCassSearch   string // search query
+	robotCassInsights bool   // aggregated insights
+	robotCassContext  string // context query
+	cassAgent         string // filter by agent
+	cassWorkspace     string // filter by workspace
+	cassSince         string // filter by time
+	cassLimit         int    // max results
 )
 
 func init() {
@@ -508,6 +546,18 @@ func init() {
 	// Robot-restore flags for session state restoration
 	rootCmd.Flags().StringVar(&robotRestore, "robot-restore", "", "Restore session from saved state (JSON output)")
 	rootCmd.Flags().BoolVar(&robotRestoreDry, "dry-run", false, "Preview restore without executing (used with --robot-restore)")
+
+	// Robot-cass flags for CASS integration
+	rootCmd.Flags().BoolVar(&robotCassStatus, "robot-cass-status", false, "Output CASS health and stats as JSON")
+	rootCmd.Flags().StringVar(&robotCassSearch, "robot-cass-search", "", "Search CASS index and return JSON results")
+	rootCmd.Flags().BoolVar(&robotCassInsights, "robot-cass-insights", false, "Output CASS aggregated insights as JSON")
+	rootCmd.Flags().StringVar(&robotCassContext, "robot-cass-context", "", "Get relevant past context for a query as JSON")
+
+	// CASS filters
+	rootCmd.Flags().StringVar(&cassAgent, "cass-agent", "", "Filter CASS search by agent type")
+	rootCmd.Flags().StringVar(&cassWorkspace, "cass-workspace", "", "Filter CASS search by workspace")
+	rootCmd.Flags().StringVar(&cassSince, "cass-since", "", "Filter CASS search by time (e.g. 7d)")
+	rootCmd.Flags().IntVar(&cassLimit, "cass-limit", 10, "Limit CASS search results")
 
 	// Sync version info with robot package
 	robot.Version = Version
