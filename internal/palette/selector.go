@@ -190,10 +190,21 @@ func (s SessionSelector) View() string {
 
 	var b strings.Builder
 
-	// Box width
-	boxWidth := 55
-	if s.width > 70 {
+	// Responsive box width based on layout mode
+	layoutMode := styles.GetLayoutMode(s.width)
+	var boxWidth int
+	switch layoutMode {
+	case styles.LayoutUltraWide:
+		boxWidth = 80
+	case styles.LayoutSpacious:
+		boxWidth = 70
+	case styles.LayoutDefault:
 		boxWidth = 60
+	default:
+		boxWidth = s.width - 6
+		if boxWidth < 45 {
+			boxWidth = 45
+		}
 	}
 
 	b.WriteString("\n")

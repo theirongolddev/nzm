@@ -514,14 +514,49 @@ func (m Model) viewCommandPhase() string {
 
 	var b strings.Builder
 
-	// Calculate layout dimensions
-	listWidth := m.width/2 - 2
-	previewWidth := m.width/2 - 2
-	if listWidth < 35 {
-		listWidth = 35
+	// Calculate layout dimensions with responsive breakpoints
+	// Inspired by beads_viewer's adaptive layout system
+	const (
+		splitViewThreshold = 90   // Minimum width to show split view
+		minColumnWidth     = 35   // Minimum column width
+		maxListWidth       = 70   // Maximum list width
+		maxPreviewWidth    = 100  // Maximum preview width
+	)
+
+	layoutMode := styles.GetLayoutMode(m.width)
+	showSplitView := m.width >= splitViewThreshold
+
+	var listWidth, previewWidth int
+	if !showSplitView {
+		// Narrow display: full width for list only
+		listWidth = m.width - 4
+		previewWidth = 0
+	} else if layoutMode == styles.LayoutUltraWide {
+		// Ultra-wide: generous proportions with max limits
+		listWidth = m.width * 35 / 100 // 35% for list
+		if listWidth > maxListWidth {
+			listWidth = maxListWidth
+		}
+		previewWidth = m.width - listWidth - 8 // Rest for preview
+		if previewWidth > maxPreviewWidth {
+			previewWidth = maxPreviewWidth
+		}
+	} else if layoutMode == styles.LayoutSpacious {
+		// Wide display: 40/60 split
+		listWidth = m.width * 40 / 100
+		previewWidth = m.width * 55 / 100
+	} else {
+		// Standard display: 50/50 split
+		listWidth = m.width/2 - 2
+		previewWidth = m.width/2 - 2
 	}
-	if previewWidth < 35 {
-		previewWidth = 35
+
+	// Ensure minimums
+	if listWidth < minColumnWidth {
+		listWidth = minColumnWidth
+	}
+	if showSplitView && previewWidth < minColumnWidth {
+		previewWidth = minColumnWidth
 	}
 
 	// ═══════════════════════════════════════════════════════════════
@@ -558,10 +593,9 @@ func (m Model) viewCommandPhase() string {
 	b.WriteString("  " + filterBox.Render(searchIcon+m.filter.View()) + "\n\n")
 
 	// ═══════════════════════════════════════════════════════════════
-	// TWO-COLUMN LAYOUT: Commands | Preview
+	// RESPONSIVE LAYOUT: Adapts to terminal width
 	// ═══════════════════════════════════════════════════════════════
 	listContent := m.renderCommandList(listWidth - 4)
-	previewContent := m.renderPreview(previewWidth - 4)
 
 	// List box with subtle glow
 	listBox := lipgloss.NewStyle().
@@ -571,21 +605,30 @@ func (m Model) viewCommandPhase() string {
 		Height(m.height - 14).
 		Padding(1, 1)
 
-	// Preview box with accent border
-	previewBox := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(t.Blue).
-		Width(previewWidth - 2).
-		Height(m.height - 14).
-		Padding(1, 1)
+	var columns string
+	if showSplitView {
+		// Show preview alongside list on wider displays
+		previewContent := m.renderPreview(previewWidth - 4)
 
-	// Join columns horizontally
-	columns := lipgloss.JoinHorizontal(
-		lipgloss.Top,
-		listBox.Render(listContent),
-		"  ",
-		previewBox.Render(previewContent),
-	)
+		// Preview box with accent border
+		previewBox := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(t.Blue).
+			Width(previewWidth - 2).
+			Height(m.height - 14).
+			Padding(1, 1)
+
+		// Join columns horizontally
+		columns = lipgloss.JoinHorizontal(
+			lipgloss.Top,
+			listBox.Render(listContent),
+			"  ",
+			previewBox.Render(previewContent),
+		)
+	} else {
+		// Narrow display: list only (preview shown on selection)
+		columns = listBox.Render(listContent)
+	}
 
 	b.WriteString(columns + "\n\n")
 
@@ -774,10 +817,21 @@ func (m Model) viewTargetPhase() string {
 
 	var b strings.Builder
 
-	// Box dimensions
-	boxWidth := 60
-	if m.width < 70 {
+	// Responsive box dimensions based on layout mode
+	layoutMode := styles.GetLayoutMode(m.width)
+	var boxWidth int
+	switch layoutMode {
+	case styles.LayoutUltraWide:
+		boxWidth = 80
+	case styles.LayoutSpacious:
+		boxWidth = 70
+	case styles.LayoutDefault:
+		boxWidth = 60
+	default:
 		boxWidth = m.width - 10
+		if boxWidth < 40 {
+			boxWidth = 40
+		}
 	}
 
 	b.WriteString("\n")

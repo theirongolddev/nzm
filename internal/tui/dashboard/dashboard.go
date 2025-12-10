@@ -12,6 +12,7 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/tokens"
 	"github.com/Dicklesworthstone/ntm/internal/tui/components"
 	"github.com/Dicklesworthstone/ntm/internal/tui/icons"
+	"github.com/Dicklesworthstone/ntm/internal/tui/layout"
 	"github.com/Dicklesworthstone/ntm/internal/tui/styles"
 	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
 	"github.com/charmbracelet/bubbles/key"
@@ -39,14 +40,14 @@ type HealthCheckMsg struct {
 
 // Model is the session dashboard model
 type Model struct {
-	session    string
-	panes      []tmux.Pane
-	width      int
-	height     int
-	animTick   int
-	cursor     int
-	quitting   bool
-	err        error
+	session  string
+	panes    []tmux.Pane
+	width    int
+	height   int
+	animTick int
+	cursor   int
+	quitting bool
+	err      error
 
 	// Stats
 	claudeCount int
@@ -65,18 +66,26 @@ type Model struct {
 	paneStatus map[int]PaneStatus
 
 	// Live status detection
-	detector       *status.UnifiedDetector
-	agentStatuses  map[string]status.AgentStatus // keyed by pane ID
-	lastRefresh    time.Time
-	refreshPaused  bool
-	refreshCount   int
+	detector      *status.UnifiedDetector
+	agentStatuses map[string]status.AgentStatus // keyed by pane ID
+	lastRefresh   time.Time
+	refreshPaused bool
+	refreshCount  int
 
 	// Auto-refresh configuration
 	refreshInterval time.Duration
 
 	// Health badge (bv drift status)
-	healthStatus    string // "ok", "warning", "critical", "no_baseline", "unavailable"
-	healthMessage   string
+	healthStatus  string // "ok", "warning", "critical", "no_baseline", "unavailable"
+	healthMessage string
+
+	// Responsive layout state (for wide displays)
+	layoutDims   LayoutDimensions
+	focusedPanel FocusedPanel
+	viewport     ViewportPosition
+
+	// Layout tier (narrow/split/wide/ultra)
+	tier layout.Tier
 }
 
 // PaneStatus tracks the status of a pane including compaction state
@@ -149,6 +158,7 @@ func New(session string) Model {
 		session:         session,
 		width:           80,
 		height:          24,
+		tier:            layout.TierForWidth(80),
 		theme:           t,
 		icons:           ic,
 		compaction:      status.NewCompactionRecoveryIntegrationDefault(),
@@ -240,7 +250,7 @@ func (m Model) fetchSessionDataWithOutputs() tea.Cmd {
 		if err != nil {
 			return SessionDataWithOutputMsg{Err: err}
 		}
-		
+
 		var outputs []PaneOutputData
 		for _, pane := range panes {
 			if pane.Type == tmux.AgentUser {
@@ -255,7 +265,7 @@ func (m Model) fetchSessionDataWithOutputs() tea.Cmd {
 				})
 			}
 		}
-		
+
 		return SessionDataWithOutputMsg{Panes: panes, Outputs: outputs}
 	}
 }
@@ -266,6 +276,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		m.tier = layout.TierForWidth(msg.Width)
 		return m, nil
 
 	case DashboardTickMsg:
@@ -275,14 +286,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case RefreshMsg:
 		// Trigger async fetch
 		return m, m.fetchSessionDataWithOutputs()
-		
+
 	case SessionDataWithOutputMsg:
 		if msg.Err != nil {
 			m.err = msg.Err
 		} else {
 			m.panes = msg.Panes
 			m.updateStats()
-			
+
 			// Process compaction checks and context tracking on the main thread using fetched outputs
 			for _, data := range msg.Outputs {
 				// Map type string to model name for context limits
@@ -640,12 +651,19 @@ func (m Model) renderPaneGrid() string {
 
 	var lines []string
 
-	// Calculate card width based on terminal width
-	cardWidth := 25
-	cardsPerRow := (m.width - 4) / (cardWidth + 2)
-	if cardsPerRow < 1 {
-		cardsPerRow = 1
-	}
+	// Calculate adaptive card dimensions based on terminal width
+	// Uses beads_viewer-inspired algorithm with min/max constraints
+	const (
+		minCardWidth = 22 // Minimum usable card width
+		maxCardWidth = 45 // Maximum card width for readability
+		cardGap      = 2  // Gap between cards
+	)
+
+	availableWidth := m.width - 4 // Account for margins
+	cardWidth, cardsPerRow := styles.AdaptiveCardDimensions(availableWidth, minCardWidth, maxCardWidth, cardGap)
+
+	// On wide/ultra displays, show more detail per card
+	showExtendedInfo := m.tier >= layout.TierWide
 
 	var cards []string
 
@@ -685,36 +703,39 @@ func (m Model) renderPaneGrid() string {
 
 		// Header line with icon and title
 		iconStyled := lipgloss.NewStyle().Foreground(iconColor).Bold(true).Render(agentIcon)
-		title := p.Title
-		if len(title) > cardWidth-6 {
-			title = title[:cardWidth-9] + "..."
-		}
+		title := layout.TruncateRunes(p.Title, maxInt(cardWidth-6, 10), "…")
 
 		titleStyled := lipgloss.NewStyle().Foreground(t.Text).Bold(true).Render(title)
 		cardContent.WriteString(iconStyled + " " + titleStyled + "\n")
 
-		// Index badge
+		// Index badge with variant info on wide displays
 		numBadge := lipgloss.NewStyle().
 			Foreground(t.Overlay).
 			Render(fmt.Sprintf("#%d", p.Index))
-		cardContent.WriteString(numBadge + "\n")
+		variantInfo := ""
+		if showExtendedInfo && p.Variant != "" {
+			variantStyle := lipgloss.NewStyle().Foreground(t.Subtext).Italic(true)
+			variantInfo = " " + variantStyle.Render("("+p.Variant+")")
+		}
+		cardContent.WriteString(numBadge + variantInfo + "\n")
 
-		// Size info
+		// Size info - on wide displays show more detail
 		sizeStyle := lipgloss.NewStyle().Foreground(t.Subtext)
-		cardContent.WriteString(sizeStyle.Render(fmt.Sprintf("%dx%d", p.Width, p.Height)) + "\n")
+		if showExtendedInfo {
+			cardContent.WriteString(sizeStyle.Render(fmt.Sprintf("%dx%d cols×rows", p.Width, p.Height)) + "\n")
+		} else {
+			cardContent.WriteString(sizeStyle.Render(fmt.Sprintf("%dx%d", p.Width, p.Height)) + "\n")
+		}
 
-		// Command running (if any)
-		if p.Command != "" {
+		// Command running (if any) - only when there is room
+		if p.Command != "" && m.tier >= layout.TierSplit {
 			cmdStyle := lipgloss.NewStyle().Foreground(t.Overlay).Italic(true)
-			cmd := p.Command
-			if len(cmd) > cardWidth-4 {
-				cmd = cmd[:cardWidth-7] + "..."
-			}
+			cmd := layout.TruncateRunes(p.Command, maxInt(cardWidth-4, 8), "…")
 			cardContent.WriteString(cmdStyle.Render(cmd))
 		}
 
 		// Context usage bar
-		if ps, ok := m.paneStatus[p.Index]; ok && ps.ContextLimit > 0 {
+		if ps, ok := m.paneStatus[p.Index]; ok && ps.ContextLimit > 0 && m.tier >= layout.TierWide {
 			cardContent.WriteString("\n")
 			contextBar := m.renderContextBar(ps.ContextPercent, cardWidth-4)
 			cardContent.WriteString(contextBar)
@@ -790,6 +811,13 @@ func (m Model) renderHelpBar() string {
 	}
 
 	return strings.Join(parts, "  ")
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 // Run starts the dashboard

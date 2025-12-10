@@ -199,21 +199,27 @@ const (
 )
 
 // Breakpoints defines responsive width thresholds.
+// Inspired by beads_viewer's ultra-wide display optimizations.
 type Breakpoints struct {
-	XS int // Extra small (< 40 cols)
-	SM int // Small (40-60 cols)
-	MD int // Medium (60-80 cols)
-	LG int // Large (80-100 cols)
-	XL int // Extra large (> 100 cols)
+	XS        int // Extra small (< 40 cols)
+	SM        int // Small (40-60 cols)
+	MD        int // Medium (60-80 cols)
+	LG        int // Large (80-120 cols)
+	XL        int // Extra large (120-160 cols)
+	Wide      int // Wide displays (160-200 cols)
+	UltraWide int // Ultra-wide displays (> 200 cols)
 }
 
 // DefaultBreakpoints provides standard responsive breakpoints.
+// These thresholds are optimized for modern high-resolution displays.
 var DefaultBreakpoints = Breakpoints{
-	XS: 40,
-	SM: 60,
-	MD: 80,
-	LG: 100,
-	XL: 120,
+	XS:        40,
+	SM:        60,
+	MD:        80,
+	LG:        120,
+	XL:        160,
+	Wide:      200,
+	UltraWide: 240,
 }
 
 // DesignTokens aggregates all design tokens into a single structure.
@@ -356,7 +362,68 @@ func Spacious() DesignTokens {
 	}
 }
 
+// UltraWide returns tokens optimized for ultra-wide displays (200+ cols).
+// These take full advantage of available horizontal space.
+func UltraWide() DesignTokens {
+	return DesignTokens{
+		Spacing: Spacing{
+			None: 0,
+			XS:   2,
+			SM:   4,
+			MD:   6,
+			LG:   8,
+			XL:   12,
+			XXL:  16,
+		},
+		Size: Size{
+			XS:  30,
+			SM:  50,
+			MD:  70,
+			LG:  100,
+			XL:  140,
+			XXL: 180,
+		},
+		Typography: Typography{
+			SizeXS:           12,
+			SizeSM:           14,
+			SizeMD:           16,
+			SizeLG:           20,
+			SizeXL:           24,
+			SizeXXL:          32,
+			LineHeightTight:  1,
+			LineHeightNormal: 2,
+			LineHeightLoose:  4,
+		},
+		Layout: LayoutTokens{
+			MarginPage:       6,
+			MarginSection:    4,
+			MarginItem:       2,
+			PaddingCard:      4,
+			PaddingInline:    3,
+			PaddingInput:     2,
+			IconWidth:        5,
+			LabelWidth:       20,
+			BadgeMinWidth:    10,
+			InputMinWidth:    35,
+			ButtonMinWidth:   14,
+			ListIndent:       6,
+			ListItemPadding:  2,
+			ListGutterWidth:  6,
+			TableColumnGap:   6,
+			TableRowPadding:  1,
+			ModalWidth:       120,
+			ModalMinHeight:   20,
+			DashCardWidth:    40,
+			DashCardHeight:   10,
+			DashGridGap:      3,
+		},
+		Animation:   DefaultAnimation,
+		Breakpoints: DefaultBreakpoints,
+	}
+}
+
 // TokensForWidth returns appropriate tokens based on terminal width.
+// Supports compact, default, spacious, and ultra-wide layouts.
 func TokensForWidth(width int) DesignTokens {
 	bp := DefaultBreakpoints
 	switch {
@@ -364,7 +431,65 @@ func TokensForWidth(width int) DesignTokens {
 		return Compact()
 	case width < bp.MD:
 		return DefaultTokens()
-	default:
+	case width < bp.Wide:
 		return Spacious()
+	default:
+		return UltraWide()
 	}
+}
+
+// LayoutMode represents the current layout mode based on width.
+type LayoutMode int
+
+const (
+	LayoutCompact   LayoutMode = iota // Narrow terminals
+	LayoutDefault                     // Standard terminals
+	LayoutSpacious                    // Wide terminals
+	LayoutUltraWide                   // Ultra-wide displays
+)
+
+// GetLayoutMode returns the appropriate layout mode for the given width.
+func GetLayoutMode(width int) LayoutMode {
+	bp := DefaultBreakpoints
+	switch {
+	case width < bp.XS:
+		return LayoutCompact
+	case width < bp.MD:
+		return LayoutDefault
+	case width < bp.Wide:
+		return LayoutSpacious
+	default:
+		return LayoutUltraWide
+	}
+}
+
+// AdaptiveCardDimensions calculates optimal card dimensions for a grid layout.
+// Inspired by beads_viewer's adaptive column width algorithm.
+func AdaptiveCardDimensions(totalWidth, minCardWidth, maxCardWidth, gap int) (cardWidth, cardsPerRow int) {
+	if totalWidth < minCardWidth {
+		return totalWidth, 1
+	}
+
+	// Calculate how many cards can fit
+	cardsPerRow = (totalWidth + gap) / (minCardWidth + gap)
+	if cardsPerRow < 1 {
+		cardsPerRow = 1
+	}
+
+	// Calculate optimal card width to fill available space
+	totalGaps := (cardsPerRow - 1) * gap
+	availableWidth := totalWidth - totalGaps
+	cardWidth = availableWidth / cardsPerRow
+
+	// Clamp to max width
+	if cardWidth > maxCardWidth {
+		cardWidth = maxCardWidth
+		// Recalculate cards per row with max width
+		cardsPerRow = (totalWidth + gap) / (maxCardWidth + gap)
+		if cardsPerRow < 1 {
+			cardsPerRow = 1
+		}
+	}
+
+	return cardWidth, cardsPerRow
 }
