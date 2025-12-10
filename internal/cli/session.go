@@ -31,7 +31,7 @@ Examples:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				// No session specified, list sessions
-				return runList()
+				return runList(nil)
 			}
 			return runAttach(args[0])
 		},
@@ -51,7 +51,7 @@ func runAttach(session string) error {
 
 	fmt.Printf("Session '%s' does not exist.\n\n", session)
 	fmt.Println("Available sessions:")
-	if err := runList(); err != nil {
+	if err := runList(nil); err != nil {
 		return err
 	}
 	fmt.Println()
@@ -64,17 +64,20 @@ func runAttach(session string) error {
 }
 
 func newListCmd() *cobra.Command {
-	return &cobra.Command{
+	var tags []string
+	cmd := &cobra.Command{
 		Use:     "list",
 		Aliases: []string{"ls", "l"},
 		Short:   "List all tmux sessions",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runList()
+			return runList(tags)
 		},
 	}
+	cmd.Flags().StringSliceVar(&tags, "tag", nil, "filter sessions by agent tag (shows session if any agent matches)")
+	return cmd
 }
 
-func runList() error {
+func runList(tags []string) error {
 	if err := tmux.EnsureInstalled(); err != nil {
 		if IsJSONOutput() {
 			return output.PrintJSON(output.NewError(err.Error()))
@@ -88,6 +91,28 @@ func runList() error {
 			return output.PrintJSON(output.NewError(err.Error()))
 		}
 		return err
+	}
+
+	// Filter sessions by tag
+	if len(tags) > 0 {
+		var filtered []tmux.Session
+		for _, s := range sessions {
+			panes, err := tmux.GetPanes(s.Name)
+			if err == nil {
+				// Check if any pane has matching tag
+				hasTag := false
+				for _, p := range panes {
+					if HasAnyTag(p.Tags, tags) {
+						hasTag = true
+						break
+					}
+				}
+				if hasTag {
+					filtered = append(filtered, s)
+				}
+			}
+		}
+		sessions = filtered
 	}
 
 	// Build response for JSON output
@@ -156,7 +181,8 @@ func runList() error {
 }
 
 func newStatusCmd() *cobra.Command {
-	return &cobra.Command{
+	var tags []string
+	cmd := &cobra.Command{
 		Use:   "status <session-name>",
 		Short: "Show detailed status of a session",
 		Long: `Show detailed information about a session including:
@@ -165,15 +191,18 @@ func newStatusCmd() *cobra.Command {
 - Session directory
 
 Examples:
-  ntm status myproject`,
+  ntm status myproject
+  ntm status myproject --tag=frontend`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runStatus(cmd.OutOrStdout(), args[0])
+			return runStatus(cmd.OutOrStdout(), args[0], tags)
 		},
 	}
+	cmd.Flags().StringSliceVar(&tags, "tag", nil, "filter panes by tag")
+	return cmd
 }
 
-func runStatus(w io.Writer, session string) error {
+func runStatus(w io.Writer, session string, tags []string) error {
 	// Helper for JSON error output
 	outputError := func(err error) error {
 		if IsJSONOutput() {
@@ -200,6 +229,17 @@ func runStatus(w io.Writer, session string) error {
 	panes, err := tmux.GetPanes(session)
 	if err != nil {
 		return outputError(err)
+	}
+
+	// Filter panes by tag
+	if len(tags) > 0 {
+		var filtered []tmux.Pane
+		for _, p := range panes {
+			if HasAnyTag(p.Tags, tags) {
+				filtered = append(filtered, p)
+			}
+		}
+		panes = filtered
 	}
 
 	dir := cfg.GetProjectDir(session)

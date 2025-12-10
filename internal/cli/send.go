@@ -733,22 +733,29 @@ func runSendInternal(session, prompt, templateName string, targets SendTargets, 
 }
 
 func newInterruptCmd() *cobra.Command {
-	return &cobra.Command{
+	var tags []string
+
+	cmd := &cobra.Command{
 		Use:   "interrupt <session>",
 		Short: "Send Ctrl+C to all agent panes",
 		Long: `Send an interrupt signal (Ctrl+C) to all agent panes in a session.
 User panes are not affected.
 
 Examples:
-  ntm interrupt myproject`,
+  ntm interrupt myproject
+  ntm interrupt myproject --tag=frontend`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runInterrupt(args[0])
+			return runInterrupt(args[0], tags)
 		},
 	}
+
+	cmd.Flags().StringSliceVar(&tags, "tag", nil, "filter panes by tag (OR logic)")
+
+	return cmd
 }
 
-func runInterrupt(session string) error {
+func runInterrupt(session string, tags []string) error {
 	if err := tmux.EnsureInstalled(); err != nil {
 		return err
 	}
@@ -766,6 +773,13 @@ func runInterrupt(session string) error {
 	for _, p := range panes {
 		// Only interrupt agent panes
 		if p.Type == tmux.AgentClaude || p.Type == tmux.AgentCodex || p.Type == tmux.AgentGemini {
+			// Check tags
+			if len(tags) > 0 {
+				if !HasAnyTag(p.Tags, tags) {
+					continue
+				}
+			}
+
 			if err := tmux.SendInterrupt(p.ID); err != nil {
 				return fmt.Errorf("interrupting pane %d: %w", p.Index, err)
 			}
@@ -779,6 +793,7 @@ func runInterrupt(session string) error {
 
 func newKillCmd() *cobra.Command {
 	var force bool
+	var tags []string
 
 	cmd := &cobra.Command{
 		Use:   "kill <session>",
@@ -787,25 +802,62 @@ func newKillCmd() *cobra.Command {
 
 Examples:
   ntm kill myproject           # Prompts for confirmation
-  ntm kill myproject --force   # No confirmation`,
+  ntm kill myproject --force   # No confirmation
+  ntm kill myproject --tag=ui  # Kill only panes with 'ui' tag`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runKill(args[0], force)
+			return runKill(args[0], force, tags)
 		},
 	}
 
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "skip confirmation")
+	cmd.Flags().StringSliceVar(&tags, "tag", nil, "filter panes to kill by tag (if used, only matching panes are killed)")
 
 	return cmd
 }
 
-func runKill(session string, force bool) error {
+func runKill(session string, force bool, tags []string) error {
 	if err := tmux.EnsureInstalled(); err != nil {
 		return err
 	}
 
 	if !tmux.SessionExists(session) {
 		return fmt.Errorf("session '%s' not found", session)
+	}
+
+	// If tags are provided, kill specific panes
+	if len(tags) > 0 {
+		panes, err := tmux.GetPanes(session)
+		if err != nil {
+			return err
+		}
+
+		var toKill []tmux.Pane
+		for _, p := range panes {
+			if HasAnyTag(p.Tags, tags) {
+				toKill = append(toKill, p)
+			}
+		}
+
+		if len(toKill) == 0 {
+			fmt.Println("No panes found matching tags.")
+			return nil
+		}
+
+		if !force {
+			if !confirm(fmt.Sprintf("Kill %d pane(s) matching tags %v?", len(toKill), tags)) {
+				fmt.Println("Aborted.")
+				return nil
+			}
+		}
+
+		for _, p := range toKill {
+			if err := tmux.KillPane(p.ID); err != nil {
+				return fmt.Errorf("killing pane %s: %w", p.ID, err)
+			}
+		}
+		fmt.Printf("Killed %d pane(s)\n", len(toKill))
+		return nil
 	}
 
 	if !force {
@@ -866,18 +918,6 @@ func buildTargetDescription(targetCC, targetCod, targetGmi, targetAll, skipFirst
 		return "all-agents"
 	}
 	return strings.Join(targets, ",")
-}
-
-// HasAnyTag checks if any of the pane's tags match any of the filter tags
-func HasAnyTag(paneTags, filterTags []string) bool {
-	for _, ft := range filterTags {
-		for _, pt := range paneTags {
-			if strings.EqualFold(pt, ft) {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 // getSessionWorkingDir returns the working directory for a session

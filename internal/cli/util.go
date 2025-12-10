@@ -27,3 +27,16 @@ func IsInteractive(w io.Writer) bool {
 	}
 	return isatty.IsTerminal(f.Fd()) || isatty.IsCygwinTerminal(f.Fd())
 }
+
+// HasAnyTag checks if any of the pane's tags match any of the filter tags.
+// Comparison is case-insensitive.
+func HasAnyTag(paneTags, filterTags []string) bool {
+	for _, ft := range filterTags {
+		for _, pt := range paneTags {
+			if strings.EqualFold(pt, ft) {
+				return true
+			}
+		}
+	}
+	return false
+}
