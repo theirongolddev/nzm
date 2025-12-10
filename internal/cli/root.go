@@ -158,6 +158,29 @@ Shell Integration:
 			if robotSendType != "" {
 				agentTypes = strings.Split(robotSendType, ",")
 			}
+
+			// Check if --track flag is set for combined send+ack mode
+			if robotAckTrack {
+				opts := robot.SendAndAckOptions{
+					SendOptions: robot.SendOptions{
+						Session:    robotSend,
+						Message:    robotSendMsg,
+						All:        robotSendAll,
+						Panes:      paneFilter,
+						AgentTypes: agentTypes,
+						Exclude:    excludeList,
+						DelayMs:    robotSendDelay,
+					},
+					AckTimeoutMs: robotAckTimeout,
+					AckPollMs:    robotAckPoll,
+				}
+				if err := robot.PrintSendAndAck(opts); err != nil {
+					fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+					os.Exit(1)
+				}
+				return
+			}
+
 			opts := robot.SendOptions{
 				Session:    robotSend,
 				Message:    robotSendMsg,
@@ -180,10 +203,46 @@ Shell Integration:
 			}
 			return
 		}
+		if robotAck != "" {
+			// Parse pane filter
+			var paneFilter []string
+			if robotPanes != "" {
+				paneFilter = strings.Split(robotPanes, ",")
+			}
+			opts := robot.AckOptions{
+				Session:   robotAck,
+				Message:   robotSendMsg, // Reuse --msg flag for echo detection
+				Panes:     paneFilter,
+				TimeoutMs: robotAckTimeout,
+				PollMs:    robotAckPoll,
+			}
+			if err := robot.PrintAck(opts); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
 		// TODO(ntm-20n): --robot-assign is in development
 		if robotAssign != "" {
 			fmt.Fprintf(os.Stderr, "Error: --robot-assign is not yet implemented\n")
 			os.Exit(1)
+		}
+		if robotSpawn != "" {
+			opts := robot.SpawnOptions{
+				Session:      robotSpawn,
+				CCCount:      robotSpawnCC,
+				CodCount:     robotSpawnCod,
+				GmiCount:     robotSpawnGmi,
+				Preset:       robotSpawnPreset,
+				NoUserPane:   robotSpawnNoUser,
+				WaitReady:    robotSpawnWait,
+				ReadyTimeout: robotSpawnTimeout,
+			}
+			if err := robot.PrintSpawn(opts, cfg); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
 		}
 
 		// Show stunning help with gradients when run without subcommand
@@ -224,6 +283,22 @@ var (
 
 	// Robot-health flag
 	robotHealth bool // project health summary
+
+	// Robot-ack flags for send confirmation tracking
+	robotAck        string // session name for ack
+	robotAckTimeout int    // timeout in milliseconds
+	robotAckPoll    int    // poll interval in milliseconds
+	robotAckTrack   bool   // combined send+ack mode
+
+	// Robot-spawn flags for structured session creation
+	robotSpawn        string // session name for spawn
+	robotSpawnCC      int    // number of Claude agents
+	robotSpawnCod     int    // number of Codex agents
+	robotSpawnGmi     int    // number of Gemini agents
+	robotSpawnPreset  string // recipe/preset name
+	robotSpawnNoUser  bool   // don't create user pane
+	robotSpawnWait    bool   // wait for agents to be ready
+	robotSpawnTimeout int    // timeout for ready detection in seconds
 )
 
 func init() {
@@ -263,6 +338,22 @@ func init() {
 
 	// Robot-health flag for project health summary
 	rootCmd.Flags().BoolVar(&robotHealth, "robot-health", false, "Output project health summary as JSON for AI agents")
+
+	// Robot-ack flags for send confirmation tracking
+	rootCmd.Flags().StringVar(&robotAck, "robot-ack", "", "Watch panes for acknowledgment after send (JSON output)")
+	rootCmd.Flags().IntVar(&robotAckTimeout, "ack-timeout", 30000, "Timeout in milliseconds for acknowledgment (used with --robot-ack)")
+	rootCmd.Flags().IntVar(&robotAckPoll, "ack-poll", 500, "Poll interval in milliseconds (used with --robot-ack)")
+	rootCmd.Flags().BoolVar(&robotAckTrack, "track", false, "Combined send+ack mode: send message and wait for acknowledgment (used with --robot-send)")
+
+	// Robot-spawn flags for structured session creation
+	rootCmd.Flags().StringVar(&robotSpawn, "robot-spawn", "", "Create session and spawn agents (JSON output)")
+	rootCmd.Flags().IntVar(&robotSpawnCC, "spawn-cc", 0, "Number of Claude agents (used with --robot-spawn)")
+	rootCmd.Flags().IntVar(&robotSpawnCod, "spawn-cod", 0, "Number of Codex agents (used with --robot-spawn)")
+	rootCmd.Flags().IntVar(&robotSpawnGmi, "spawn-gmi", 0, "Number of Gemini agents (used with --robot-spawn)")
+	rootCmd.Flags().StringVar(&robotSpawnPreset, "spawn-preset", "", "Recipe/preset name (used with --robot-spawn)")
+	rootCmd.Flags().BoolVar(&robotSpawnNoUser, "spawn-no-user", false, "Don't create user pane (used with --robot-spawn)")
+	rootCmd.Flags().BoolVar(&robotSpawnWait, "spawn-wait", false, "Wait for agents to be ready (used with --robot-spawn)")
+	rootCmd.Flags().IntVar(&robotSpawnTimeout, "spawn-timeout", 30, "Timeout in seconds for ready detection (used with --robot-spawn)")
 
 	// Sync version info with robot package
 	robot.Version = Version
@@ -320,7 +411,6 @@ func init() {
 		newTutorialCmd(),
 
 		// Agent Mail & File Reservations
-		newMailCmd(),
 		newLockCmd(),
 		newUnlockCmd(),
 		newLocksCmd(),

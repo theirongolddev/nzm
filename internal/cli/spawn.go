@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/agentmail"
+	"github.com/Dicklesworthstone/ntm/internal/hooks"
 	"github.com/Dicklesworthstone/ntm/internal/output"
 	"github.com/Dicklesworthstone/ntm/internal/recipe"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
@@ -108,6 +109,48 @@ func runSpawn(session string, ccCount, codCount, gmiCount int, userPane bool) er
 	}
 
 	dir := cfg.GetProjectDir(session)
+
+	// Initialize hook executor
+	hookExec, err := hooks.NewExecutorFromConfig()
+	if err != nil {
+		// Log warning but don't fail if hooks can't be loaded
+		if !IsJSONOutput() {
+			fmt.Printf("⚠ Warning: could not load hooks config: %v\n", err)
+		}
+		hookExec = hooks.NewExecutor(nil) // Use empty config
+	}
+
+	// Build execution context for hooks
+	hookCtx := hooks.ExecutionContext{
+		SessionName: session,
+		ProjectDir:  dir,
+		AdditionalEnv: map[string]string{
+			"NTM_AGENT_COUNT_CC":    fmt.Sprintf("%d", ccCount),
+			"NTM_AGENT_COUNT_COD":   fmt.Sprintf("%d", codCount),
+			"NTM_AGENT_COUNT_GMI":   fmt.Sprintf("%d", gmiCount),
+			"NTM_AGENT_COUNT_TOTAL": fmt.Sprintf("%d", totalAgents),
+		},
+	}
+
+	// Run pre-spawn hooks
+	if hookExec.HasHooksForEvent(hooks.EventPreSpawn) {
+		if !IsJSONOutput() {
+			fmt.Println("Running pre-spawn hooks...")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		results, err := hookExec.RunHooksForEvent(ctx, hooks.EventPreSpawn, hookCtx)
+		cancel()
+		if err != nil {
+			return outputError(fmt.Errorf("pre-spawn hook failed: %w", err))
+		}
+		if hooks.AnyFailed(results) {
+			return outputError(fmt.Errorf("pre-spawn hook failed: %w", hooks.AllErrors(results)))
+		}
+		if !IsJSONOutput() {
+			success, _, _ := hooks.CountResults(results)
+			fmt.Printf("✓ %d pre-spawn hook(s) completed\n", success)
+		}
+	}
 
 	// Check if directory exists
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
@@ -265,6 +308,40 @@ func runSpawn(session string, ccCount, codCount, gmiCount int, userPane bool) er
 	}
 
 	fmt.Printf("✓ Launched %d agent(s)\n", totalAgents)
+
+	// Run post-spawn hooks
+	if hookExec.HasHooksForEvent(hooks.EventPostSpawn) {
+		if !IsJSONOutput() {
+			fmt.Println("Running post-spawn hooks...")
+		}
+
+		// Enrich hook context with final spawn state
+		hookCtx.AdditionalEnv["NTM_PANE_COUNT"] = fmt.Sprintf("%d", len(finalPanes))
+
+		// Build list of pane titles for hooks
+		var paneTitles []string
+		for _, p := range finalPanes {
+			if p.Title != "" {
+				paneTitles = append(paneTitles, p.Title)
+			}
+		}
+		hookCtx.AdditionalEnv["NTM_PANE_TITLES"] = strings.Join(paneTitles, ",")
+		hookCtx.AdditionalEnv["NTM_SPAWN_SUCCESS"] = "true"
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		results, postErr := hookExec.RunHooksForEvent(ctx, hooks.EventPostSpawn, hookCtx)
+		cancel()
+		if postErr != nil {
+			// Log error but don't fail (spawn already succeeded)
+			fmt.Printf("⚠ Post-spawn hook error: %v\n", postErr)
+		} else if hooks.AnyFailed(results) {
+			// Log failures but don't fail (spawn already succeeded)
+			fmt.Printf("⚠ Post-spawn hook failed: %v\n", hooks.AllErrors(results))
+		} else if !IsJSONOutput() {
+			success, _, _ := hooks.CountResults(results)
+			fmt.Printf("✓ %d post-spawn hook(s) completed\n", success)
+		}
+	}
 
 	// Register session as Agent Mail agent (non-blocking)
 	registerSessionAgent(session, dir)
