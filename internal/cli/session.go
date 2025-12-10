@@ -224,6 +224,12 @@ func runStatus(session string) error {
 
 	ccCount, codCount, gmiCount, otherCount := 0, 0, 0, 0
 
+	// Create status detector for agent state detection
+	detector := status.NewDetector()
+
+	// Get error color for status display
+	errorColor := colorize(t.Error)
+
 	for i, p := range panes {
 		var typeColor, typeIcon string
 		switch p.Type {
@@ -253,21 +259,38 @@ func runStatus(session string) error {
 			num = "  "
 		}
 
-		// Active indicator
-		active := "  "
-		if p.Active {
-			active = fmt.Sprintf("%s%s%s ", primary, ic.Dot, reset)
+		// Detect agent status
+		agentStatus, _ := detector.Detect(p.ID)
+		stateIcon := agentStatus.State.Icon()
+		stateColor := overlay
+		stateText := ""
+		switch agentStatus.State {
+		case status.StateIdle:
+			stateColor = overlay
+			stateText = "idle"
+		case status.StateWorking:
+			stateColor = success
+			stateText = "working"
+		case status.StateError:
+			stateColor = errorColor
+			stateText = "error"
+			if agentStatus.ErrorType != status.ErrorNone {
+				stateText = string(agentStatus.ErrorType)
+			}
+		default:
+			stateColor = overlay
+			stateText = "unknown"
 		}
 
-		// Pane info
-		fmt.Printf("  %s%s%s%s %-20s%s %s│%s %s%-12s%s %s│%s %s%dx%d%s\n",
+		// Pane info with status
+		fmt.Printf("  %s%s%s %s%s%s %-18s%s %s│%s %s%-10s%s %s│%s %s%-8s%s\n",
 			num,
-			active,
-			typeColor, typeIcon, p.Title, reset,
+			stateIcon,
+			stateColor, typeColor, typeIcon, p.Title, reset,
 			surface, reset,
 			subtext, p.Command, reset,
 			surface, reset,
-			overlay, p.Width, p.Height, reset)
+			stateColor, stateText, reset)
 	}
 
 	fmt.Printf("  %s%s%s\n", surface, "─────────────────────────────────────────────────────────", reset)
