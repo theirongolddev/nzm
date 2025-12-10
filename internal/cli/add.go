@@ -13,30 +13,40 @@ import (
 )
 
 func newAddCmd() *cobra.Command {
-	var ccCount, codCount, gmiCount int
+	var agentSpecs AgentSpecs
 
 	cmd := &cobra.Command{
 		Use:   "add <session-name>",
 		Short: "Add more agents to an existing session",
 		Long: `Add additional AI agents to an existing tmux session.
 
-Examples:
-  ntm add myproject --cc=2           # Add 2 Claude agents
-  ntm add myproject --cod=1 --gmi=1  # Add 1 Codex, 1 Gemini`,
+You can specify agent counts and optional model variants:
+  ntm add myproject --cc=2           # Add 2 Claude agents (default model)
+  ntm add myproject --cc=1:opus      # Add 1 Claude Opus agent
+  ntm add myproject --cod=1 --gmi=1  # Add 1 Codex, 1 Gemini
+
+Agent count syntax: N or N:model where N is count and model is optional.
+Multiple flags of the same type accumulate.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runAdd(args[0], ccCount, codCount, gmiCount)
+			return runAdd(args[0], agentSpecs)
 		},
 	}
 
-	cmd.Flags().IntVar(&ccCount, "cc", 0, "number of Claude agents to add")
-	cmd.Flags().IntVar(&codCount, "cod", 0, "number of Codex agents to add")
-	cmd.Flags().IntVar(&gmiCount, "gmi", 0, "number of Gemini agents to add")
+	cmd.Flags().Var(NewAgentSpecsValue(AgentTypeClaude, &agentSpecs), "cc", "Claude agents (N or N:model)")
+	cmd.Flags().Var(NewAgentSpecsValue(AgentTypeCodex, &agentSpecs), "cod", "Codex agents (N or N:model)")
+	cmd.Flags().Var(NewAgentSpecsValue(AgentTypeGemini, &agentSpecs), "gmi", "Gemini agents (N or N:model)")
 
 	return cmd
 }
 
-func runAdd(session string, ccCount, codCount, gmiCount int) error {
+func runAdd(session string, specs AgentSpecs) error {
+	// Aggregate counts per type and keep per-agent model info
+	ccSpecs := specs.ByType(AgentTypeClaude)
+	codSpecs := specs.ByType(AgentTypeCodex)
+	gmiSpecs := specs.ByType(AgentTypeGemini)
+	ccCount, codCount, gmiCount := ccSpecs.TotalCount(), codSpecs.TotalCount(), gmiSpecs.TotalCount()
+	totalAgents := specs.TotalCount()
 	// Helper for JSON error output
 	outputError := func(err error) error {
 		if IsJSONOutput() {
@@ -53,7 +63,6 @@ func runAdd(session string, ccCount, codCount, gmiCount int) error {
 		return outputError(fmt.Errorf("session '%s' does not exist (use 'ntm spawn' to create)", session))
 	}
 
-	totalAgents := ccCount + codCount + gmiCount
 	if totalAgents == 0 {
 		return outputError(fmt.Errorf("no agents specified (use --cc, --cod, or --gmi)"))
 	}
@@ -125,21 +134,23 @@ func runAdd(session string, ccCount, codCount, gmiCount int) error {
 	}
 
 	// Add Claude agents
-	for i := 0; i < ccCount; i++ {
+	ccFlat := ccSpecs.Flatten()
+	for _, agent := range ccFlat {
 		paneID, err := tmux.SplitWindow(session, dir)
 		if err != nil {
 			return outputError(fmt.Errorf("creating pane: %w", err))
 		}
 
-		num := maxCC + i + 1
+		num := maxCC + agent.Index
 		title := fmt.Sprintf("%s__cc_%d", session, num)
 		if err := tmux.SetPaneTitle(paneID, title); err != nil {
 			return outputError(fmt.Errorf("setting pane title: %w", err))
 		}
 
-		// Generate command using template (default model)
+		// Generate command using template (respect model if provided)
+		model := ResolveModel(AgentTypeClaude, agent.Model)
 		agentCmd, err := config.GenerateAgentCommand(cfg.Agents.Claude, config.AgentTemplateVars{
-			Model:       cfg.Models.DefaultClaude,
+			Model:       model,
 			SessionName: session,
 			PaneIndex:   num,
 			AgentType:   "cc",
@@ -163,21 +174,23 @@ func runAdd(session string, ccCount, codCount, gmiCount int) error {
 	}
 
 	// Add Codex agents
-	for i := 0; i < codCount; i++ {
+	codFlat := codSpecs.Flatten()
+	for _, agent := range codFlat {
 		paneID, err := tmux.SplitWindow(session, dir)
 		if err != nil {
 			return outputError(fmt.Errorf("creating pane: %w", err))
 		}
 
-		num := maxCod + i + 1
+		num := maxCod + agent.Index
 		title := fmt.Sprintf("%s__cod_%d", session, num)
 		if err := tmux.SetPaneTitle(paneID, title); err != nil {
 			return outputError(fmt.Errorf("setting pane title: %w", err))
 		}
 
-		// Generate command using template (default model)
+		// Generate command using template (respect model if provided)
+		model := ResolveModel(AgentTypeCodex, agent.Model)
 		codexCmd, err := config.GenerateAgentCommand(cfg.Agents.Codex, config.AgentTemplateVars{
-			Model:       cfg.Models.DefaultCodex,
+			Model:       model,
 			SessionName: session,
 			PaneIndex:   num,
 			AgentType:   "cod",
@@ -201,21 +214,23 @@ func runAdd(session string, ccCount, codCount, gmiCount int) error {
 	}
 
 	// Add Gemini agents
-	for i := 0; i < gmiCount; i++ {
+	gmiFlat := gmiSpecs.Flatten()
+	for _, agent := range gmiFlat {
 		paneID, err := tmux.SplitWindow(session, dir)
 		if err != nil {
 			return outputError(fmt.Errorf("creating pane: %w", err))
 		}
 
-		num := maxGmi + i + 1
+		num := maxGmi + agent.Index
 		title := fmt.Sprintf("%s__gmi_%d", session, num)
 		if err := tmux.SetPaneTitle(paneID, title); err != nil {
 			return outputError(fmt.Errorf("setting pane title: %w", err))
 		}
 
-		// Generate command using template (default model)
+		// Generate command using template (respect model if provided)
+		model := ResolveModel(AgentTypeGemini, agent.Model)
 		geminiCmd, err := config.GenerateAgentCommand(cfg.Agents.Gemini, config.AgentTemplateVars{
-			Model:       cfg.Models.DefaultGemini,
+			Model:       model,
 			SessionName: session,
 			PaneIndex:   num,
 			AgentType:   "gmi",
