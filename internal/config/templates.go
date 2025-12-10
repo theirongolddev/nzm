@@ -8,12 +8,28 @@ import (
 
 // AgentTemplateVars contains variables available for agent command templates
 type AgentTemplateVars struct {
-	Model       string // Resolved full model name (e.g., "claude-opus-4-20250514")
-	ModelAlias  string // Original alias as specified (e.g., "opus")
-	SessionName string // NTM session name
-	PaneIndex   int    // Pane number (1-based)
-	AgentType   string // Agent type: "cc", "cod", "gmi"
-	ProjectDir  string // Project directory path
+	Model            string // Resolved full model name (e.g., "claude-opus-4-20250514")
+	ModelAlias       string // Original alias as specified (e.g., "opus")
+	SessionName      string // NTM session name
+	PaneIndex        int    // Pane number (1-based)
+	AgentType        string // Agent type: "cc", "cod", "gmi"
+	ProjectDir       string // Project directory path
+	SystemPrompt     string // System prompt content (if any)
+	SystemPromptFile string // Path to system prompt file (if any)
+	PersonaName      string // Name of persona (if any)
+}
+
+// ShellQuote safely quotes a string for use in shell commands.
+// It uses single quotes and escapes any single quotes within the string.
+// Example: "hello 'world'" becomes "'hello '\''world'\'''"
+func ShellQuote(s string) string {
+	// Empty string gets empty quotes
+	if s == "" {
+		return "''"
+	}
+	// Replace single quotes with '\'' (end quote, escaped quote, start quote)
+	escaped := strings.ReplaceAll(s, "'", "'\\''")
+	return "'" + escaped + "'"
 }
 
 // templateFuncs contains custom functions available in templates
@@ -53,6 +69,9 @@ var templateFuncs = template.FuncMap{
 	"upper": func(s string) string {
 		return strings.ToUpper(s)
 	},
+	// shellQuote safely quotes a string for shell command usage
+	// Use this when inserting untrusted values into shell commands
+	"shellQuote": ShellQuote,
 }
 
 // GenerateAgentCommand renders an agent command template with the given variables.
@@ -92,10 +111,11 @@ func IsTemplateCommand(cmd string) bool {
 
 // DefaultAgentTemplates returns default agent command templates with model injection support.
 // These templates show the recommended format for model-aware agent commands.
+// System prompt injection is supported via SystemPromptFile for persona agents.
 func DefaultAgentTemplates() AgentConfig {
 	return AgentConfig{
-		Claude: `NODE_OPTIONS="--max-old-space-size=32768" ENABLE_BACKGROUND_TASKS=1 claude --dangerously-skip-permissions{{if .Model}} --model {{.Model}}{{end}}`,
-		Codex:  `codex --dangerously-bypass-approvals-and-sandbox -m {{.Model | default "gpt-4"}} -c model_reasoning_effort="high" -c model_reasoning_summary_format=experimental --enable web_search_request`,
-		Gemini: `gemini{{if .Model}} --model {{.Model}}{{end}} --yolo`,
+		Claude: `NODE_OPTIONS="--max-old-space-size=32768" ENABLE_BACKGROUND_TASKS=1 claude --dangerously-skip-permissions{{if .Model}} --model {{shellQuote .Model}}{{end}}{{if .SystemPromptFile}} --system-prompt-file {{shellQuote .SystemPromptFile}}{{end}}`,
+		Codex:  `{{if .SystemPromptFile}}CODEX_SYSTEM_PROMPT="$(cat {{shellQuote .SystemPromptFile}})" {{end}}codex --dangerously-bypass-approvals-and-sandbox -m {{shellQuote (.Model | default "gpt-4")}} -c model_reasoning_effort="high" -c model_reasoning_summary_format=experimental --enable web_search_request`,
+		Gemini: `gemini{{if .Model}} --model {{shellQuote .Model}}{{end}}{{if .SystemPromptFile}} --system-instruction-file {{shellQuote .SystemPromptFile}}{{end}} --yolo`,
 	}
 }

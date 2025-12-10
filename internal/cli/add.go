@@ -14,6 +14,7 @@ import (
 
 func newAddCmd() *cobra.Command {
 	var agentSpecs AgentSpecs
+	var personaSpecs PersonaSpecs
 
 	cmd := &cobra.Command{
 		Use:   "add <session-name>",
@@ -25,17 +26,48 @@ You can specify agent counts and optional model variants:
   ntm add myproject --cc=1:opus      # Add 1 Claude Opus agent
   ntm add myproject --cod=1 --gmi=1  # Add 1 Codex, 1 Gemini
 
+Persona mode:
+  Use --persona to add agents with predefined roles and system prompts.
+  Built-in personas: architect, implementer, reviewer, tester, documenter
+  ntm add myproject --persona=reviewer  # Add 1 reviewer agent
+
 Agent count syntax: N or N:model where N is count and model is optional.
 Multiple flags of the same type accumulate.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runAdd(args[0], agentSpecs)
+			sessionName := args[0]
+			dir := cfg.GetProjectDir(sessionName)
+
+			// Handle personas (they contribute to agentSpecs)
+			if len(personaSpecs) > 0 {
+				resolved, err := ResolvePersonas(personaSpecs, dir)
+				if err != nil {
+					return err
+				}
+				personaAgents := FlattenPersonas(resolved)
+
+				// Add persona agents to agentSpecs with persona name as variant
+				for _, pa := range personaAgents {
+					agentSpecs = append(agentSpecs, AgentSpec{
+						Type:  pa.AgentType,
+						Count: 1,
+						Model: pa.PersonaName, // Use persona name as variant
+					})
+				}
+
+				if !IsJSONOutput() {
+					fmt.Printf("Resolved %d persona agent(s)\n", len(personaAgents))
+				}
+			}
+
+			return runAdd(sessionName, agentSpecs)
 		},
 	}
 
 	cmd.Flags().Var(NewAgentSpecsValue(AgentTypeClaude, &agentSpecs), "cc", "Claude agents (N or N:model)")
 	cmd.Flags().Var(NewAgentSpecsValue(AgentTypeCodex, &agentSpecs), "cod", "Codex agents (N or N:model)")
 	cmd.Flags().Var(NewAgentSpecsValue(AgentTypeGemini, &agentSpecs), "gmi", "Gemini agents (N or N:model)")
+	cmd.Flags().Var(&personaSpecs, "persona", "Persona-defined agents (name or name:count)")
 
 	return cmd
 }

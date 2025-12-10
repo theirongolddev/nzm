@@ -12,6 +12,7 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/events"
 	"github.com/Dicklesworthstone/ntm/internal/hooks"
 	"github.com/Dicklesworthstone/ntm/internal/output"
+	"github.com/Dicklesworthstone/ntm/internal/persona"
 	"github.com/Dicklesworthstone/ntm/internal/recipe"
 	"github.com/Dicklesworthstone/ntm/internal/resilience"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
@@ -22,6 +23,7 @@ func newSpawnCmd() *cobra.Command {
 	var noUserPane bool
 	var recipeName string
 	var agentSpecs AgentSpecs
+	var personaSpecs PersonaSpecs
 	var autoRestart bool
 
 	cmd := &cobra.Command{
@@ -48,15 +50,53 @@ Auto-restart mode (--auto-restart):
     restart_delay_seconds = 30  # Delay before restart
     health_check_seconds = 10   # Health check interval
 
+Persona mode:
+  Use --persona to spawn agents with predefined roles and system prompts.
+  Format: --persona=name or --persona=name:count
+  Built-in personas: architect, implementer, reviewer, tester, documenter
+
 Examples:
   ntm spawn myproject --cc=2 --cod=2           # 2 Claude, 2 Codex + user pane
   ntm spawn myproject --cc=3 --cod=3 --gmi=1   # 3 Claude, 3 Codex, 1 Gemini
   ntm spawn myproject --cc=4 --no-user         # 4 Claude, no user pane
   ntm spawn myproject -r full-stack            # Use full-stack recipe
   ntm spawn myproject --cc=2:opus --cc=1:sonnet  # 2 Opus + 1 Sonnet
-  ntm spawn myproject --cc=2 --auto-restart    # With auto-restart enabled`,
+  ntm spawn myproject --cc=2 --auto-restart    # With auto-restart enabled
+  ntm spawn myproject --persona=architect --persona=implementer:2  # Using personas`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			sessionName := args[0]
+			dir := cfg.GetProjectDir(sessionName)
+
+			// Handle personas first (they contribute to agentSpecs)
+			// personaMap maps variant name to Persona for system prompt injection
+			personaMap := make(map[string]*persona.Persona)
+			if len(personaSpecs) > 0 {
+				resolved, err := ResolvePersonas(personaSpecs, dir)
+				if err != nil {
+					return err
+				}
+				personaAgents := FlattenPersonas(resolved)
+
+				// Add persona agents to agentSpecs with persona name as model variant
+				for _, pa := range personaAgents {
+					agentSpecs = append(agentSpecs, AgentSpec{
+						Type:  pa.AgentType,
+						Count: 1,              // Each persona agent is added individually
+						Model: pa.PersonaName, // Use persona name as variant for pane naming
+					})
+				}
+
+				// Build persona map for system prompt lookup
+				for _, r := range resolved {
+					personaMap[r.Persona.Name] = r.Persona
+				}
+
+				if !IsJSONOutput() {
+					fmt.Printf("Resolved %d persona agent(s)\n", len(personaAgents))
+				}
+			}
+
 			// If a recipe is specified, load it and use its agent counts
 			if recipeName != "" {
 				loader := recipe.NewLoader()
@@ -93,7 +133,7 @@ Examples:
 			codCount := agentSpecs.ByType(AgentTypeCodex).TotalCount()
 			gmiCount := agentSpecs.ByType(AgentTypeGemini).TotalCount()
 
-			return runSpawnWithSpecs(args[0], agentSpecs, ccCount, codCount, gmiCount, !noUserPane, autoRestart, recipeName)
+			return runSpawnWithSpecs(sessionName, agentSpecs, ccCount, codCount, gmiCount, !noUserPane, autoRestart, recipeName, personaMap)
 		},
 	}
 
@@ -101,6 +141,7 @@ Examples:
 	cmd.Flags().Var(NewAgentSpecsValue(AgentTypeClaude, &agentSpecs), "cc", "Claude agents (N or N:model)")
 	cmd.Flags().Var(NewAgentSpecsValue(AgentTypeCodex, &agentSpecs), "cod", "Codex agents (N or N:model)")
 	cmd.Flags().Var(NewAgentSpecsValue(AgentTypeGemini, &agentSpecs), "gmi", "Gemini agents (N or N:model)")
+	cmd.Flags().Var(&personaSpecs, "persona", "Persona-defined agents (name or name:count)")
 	cmd.Flags().BoolVar(&noUserPane, "no-user", false, "don't reserve a pane for the user")
 	cmd.Flags().StringVarP(&recipeName, "recipe", "r", "", "use a recipe for agent configuration")
 	cmd.Flags().BoolVar(&autoRestart, "auto-restart", false, "monitor and auto-restart crashed agents")
@@ -109,19 +150,19 @@ Examples:
 }
 
 // runSpawnWithSpecs handles agent specs with model-specific pane naming
-func runSpawnWithSpecs(session string, specs AgentSpecs, ccCount, codCount, gmiCount int, userPane, autoRestart bool, recipeName string) error {
+func runSpawnWithSpecs(session string, specs AgentSpecs, ccCount, codCount, gmiCount int, userPane, autoRestart bool, recipeName string, personaMap map[string]*persona.Persona) error {
 	// Flatten specs to get individual agents with their models
 	agents := specs.Flatten()
-	return runSpawnAgentsWithRestart(session, agents, ccCount, codCount, gmiCount, userPane, autoRestart, recipeName)
+	return runSpawnAgentsWithRestart(session, agents, ccCount, codCount, gmiCount, userPane, autoRestart, recipeName, personaMap)
 }
 
 // Backward-compatible helper (no auto-restart)
 func runSpawnAgents(session string, agents []FlatAgent, ccCount, codCount, gmiCount int, userPane bool) error {
-	return runSpawnAgentsWithRestart(session, agents, ccCount, codCount, gmiCount, userPane, false, "")
+	return runSpawnAgentsWithRestart(session, agents, ccCount, codCount, gmiCount, userPane, false, "", nil)
 }
 
 // runSpawnAgentsWithRestart launches agents with model-specific pane naming and optional auto-restart
-func runSpawnAgentsWithRestart(session string, agents []FlatAgent, ccCount, codCount, gmiCount int, userPane, autoRestart bool, recipeName string) error {
+func runSpawnAgentsWithRestart(session string, agents []FlatAgent, ccCount, codCount, gmiCount int, userPane, autoRestart bool, recipeName string, personaMap map[string]*persona.Persona) error {
 	// Helper for JSON error output
 	outputError := func(err error) error {
 		if IsJSONOutput() {
@@ -300,14 +341,36 @@ func runSpawnAgentsWithRestart(session string, agents []FlatAgent, ccCount, codC
 		// Resolve model alias to full model name
 		resolvedModel := ResolveModel(agent.Type, agent.Model)
 
+		// Check if this is a persona agent and prepare system prompt
+		var systemPromptFile string
+		var personaName string
+		if personaMap != nil {
+			if p, ok := personaMap[agent.Model]; ok {
+				personaName = p.Name
+				// Prepare system prompt file
+				promptFile, err := persona.PrepareSystemPrompt(p, dir)
+				if err != nil {
+					if !IsJSONOutput() {
+						fmt.Printf("⚠ Warning: could not prepare system prompt for %s: %v\n", p.Name, err)
+					}
+				} else {
+					systemPromptFile = promptFile
+				}
+				// For persona agents, resolve the model from the persona config
+				resolvedModel = ResolveModel(agent.Type, p.Model)
+			}
+		}
+
 		// Generate command using template
 		agentCmd, err := config.GenerateAgentCommand(agentCmdTemplate, config.AgentTemplateVars{
-			Model:       resolvedModel,
-			ModelAlias:  agent.Model,
-			SessionName: session,
-			PaneIndex:   agent.Index,
-			AgentType:   string(agent.Type),
-			ProjectDir:  dir,
+			Model:            resolvedModel,
+			ModelAlias:       agent.Model,
+			SessionName:      session,
+			PaneIndex:        agent.Index,
+			AgentType:        string(agent.Type),
+			ProjectDir:       dir,
+			SystemPromptFile: systemPromptFile,
+			PersonaName:      personaName,
 		})
 		if err != nil {
 			return outputError(fmt.Errorf("generating command for %s agent: %w", agent.Type, err))
