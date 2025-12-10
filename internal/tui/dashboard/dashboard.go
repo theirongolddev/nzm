@@ -99,8 +99,9 @@ type Model struct {
 	healthMessage string
 
 	// UBS scan status
-	scanStatus string              // "clean", "warning", "critical", "unavailable"
-	scanTotals scanner.ScanTotals  // Scan result totals
+	scanStatus   string              // "clean", "warning", "critical", "unavailable"
+	scanTotals   scanner.ScanTotals  // Scan result totals
+	scanDuration time.Duration       // How long the scan took
 
 	// Layout tier (narrow/split/wide/ultra)
 	tier layout.Tier
