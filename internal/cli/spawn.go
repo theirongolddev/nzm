@@ -133,6 +133,28 @@ Examples:
 			codCount := agentSpecs.ByType(AgentTypeCodex).TotalCount()
 			gmiCount := agentSpecs.ByType(AgentTypeGemini).TotalCount()
 
+			// Apply defaults from config if no agents specified
+			if ccCount+codCount+gmiCount == 0 && len(cfg.ProjectDefaults) > 0 {
+				if v, ok := cfg.ProjectDefaults["cc"]; ok && v > 0 {
+					agentSpecs = append(agentSpecs, AgentSpec{Type: AgentTypeClaude, Count: v})
+				}
+				if v, ok := cfg.ProjectDefaults["cod"]; ok && v > 0 {
+					agentSpecs = append(agentSpecs, AgentSpec{Type: AgentTypeCodex, Count: v})
+				}
+				if v, ok := cfg.ProjectDefaults["gmi"]; ok && v > 0 {
+					agentSpecs = append(agentSpecs, AgentSpec{Type: AgentTypeGemini, Count: v})
+				}
+
+				// Re-calculate counts
+				ccCount = agentSpecs.ByType(AgentTypeClaude).TotalCount()
+				codCount = agentSpecs.ByType(AgentTypeCodex).TotalCount()
+				gmiCount = agentSpecs.ByType(AgentTypeGemini).TotalCount()
+
+				if !IsJSONOutput() && (ccCount+codCount+gmiCount > 0) {
+					fmt.Printf("Using default configuration: %d cc, %d cod, %d gmi\n", ccCount, codCount, gmiCount)
+				}
+			}
+
 			return runSpawnWithSpecs(sessionName, agentSpecs, ccCount, codCount, gmiCount, !noUserPane, autoRestart, recipeName, personaMap)
 		},
 	}

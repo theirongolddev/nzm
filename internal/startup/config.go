@@ -10,10 +10,12 @@ var configLoader = NewLazy[*config.Config]("config", func() (*config.Config, err
 	span := profiler.StartWithPhase("config_load_inner", "deferred")
 	defer span.End()
 
-	cfg, err := config.Load(configFilePath)
+	// Use LoadMerged to include project-specific config
+	cfg, err := config.LoadMerged("", configFilePath)
 	if err != nil {
-		// Use defaults if config doesn't exist
-		return config.Default(), nil
+		// If loading fails (e.g. project config invalid), return error
+		// Note: LoadMerged handles global config missing by using defaults
+		return nil, err
 	}
 	return cfg, nil
 })

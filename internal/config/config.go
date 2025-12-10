@@ -51,6 +51,9 @@ type Config struct {
 	CASS          CASSConfig        `toml:"cass"`     // CASS integration configuration
 	Accounts      AccountsConfig    `toml:"accounts"` // Multi-account management
 	Rotation      RotationConfig    `toml:"rotation"` // Account rotation configuration
+	
+	// Runtime-only fields (populated by project config merging)
+	ProjectDefaults map[string]int `toml:"-"`
 }
 
 // CheckpointsConfig holds configuration for automatic checkpoints

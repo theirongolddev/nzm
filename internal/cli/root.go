@@ -647,6 +647,21 @@ func newConfigCmd() *cobra.Command {
 		},
 	})
 
+	projectCmd := &cobra.Command{
+		Use:   "project",
+		Short: "Manage project-specific configuration",
+	}
+
+	projectCmd.AddCommand(&cobra.Command{
+		Use:   "init",
+		Short: "Initialize .ntm configuration for current project",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return config.InitProjectConfig()
+		},
+	})
+
+	cmd.AddCommand(projectCmd)
+
 	return cmd
 }
 
