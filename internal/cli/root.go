@@ -437,6 +437,8 @@ func init() {
 		newKillCmd(),
 		newScanCmd(),
 		newHooksCmd(),
+		newHealthCmd(),
+		newHistoryCmd(),
 
 		// Shell integration
 		newInitCmd(),
@@ -455,6 +457,10 @@ func init() {
 
 		// Git coordination
 		newGitCmd(),
+
+		// Configuration management
+		newRecipesCmd(),
+		newPersonasCmd(),
 	)
 }
 
