@@ -3,12 +3,14 @@ package cli
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/config"
 	"github.com/Dicklesworthstone/ntm/internal/output"
+	"github.com/Dicklesworthstone/ntm/internal/plugins"
 	"github.com/Dicklesworthstone/ntm/internal/robot"
 	"github.com/Dicklesworthstone/ntm/internal/startup"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
@@ -640,6 +642,37 @@ func init() {
 		newPersonasCmd(),
 		newTemplateCmd(),
 	)
+
+	// Load command plugins
+	configDir := filepath.Dir(config.DefaultPath())
+	cmdDir := filepath.Join(configDir, "commands")
+	cmds, _ := plugins.LoadCommandPlugins(cmdDir)
+
+	for _, p := range cmds {
+		plugin := p // Capture for closure
+		cmd := &cobra.Command{
+			Use:                plugin.Name,
+			Short:              plugin.Description,
+			Long:               plugin.Description + "\n\nUsage: " + plugin.Usage,
+			DisableFlagParsing: true,
+			RunE: func(c *cobra.Command, args []string) error {
+				// Prepare env
+				env := map[string]string{
+					"NTM_CONFIG_PATH": config.DefaultPath(),
+					"NTM_VERSION":     Version,
+				}
+				if jsonOutput {
+					env["NTM_JSON"] = "1"
+				}
+				if s := tmux.GetCurrentSession(); s != "" {
+					env["NTM_SESSION"] = s
+				}
+
+				return plugin.Execute(args, env)
+			},
+		}
+		rootCmd.AddCommand(cmd)
+	}
 }
 
 func newVersionCmd() *cobra.Command {
