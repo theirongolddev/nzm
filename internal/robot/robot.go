@@ -63,9 +63,9 @@ type SystemInfo struct {
 
 // StatusOutput is the structured output for robot-status
 type StatusOutput struct {
-	GeneratedAt  time.Time     `json:"generated_at"`
-	System       SystemInfo    `json:"system"`
-	Sessions     []SessionInfo `json:"sessions"`
+	GeneratedAt  time.Time        `json:"generated_at"`
+	System       SystemInfo       `json:"system"`
+	Sessions     []SessionInfo    `json:"sessions"`
 	Summary      StatusSummary    `json:"summary"`
 	Beads        *bv.BeadsSummary `json:"beads,omitempty"`
 	GraphMetrics *GraphMetrics    `json:"graph_metrics,omitempty"`
@@ -1452,4 +1452,171 @@ func PrintRecipes() error {
 	}
 
 	return encodeJSON(output)
+}
+
+// TerseState represents the ultra-compact state for token-constrained scenarios.
+// Format: S:session|A:active/total|R:ready|B:blocked|I:in_progress|M:mail|!:alerts
+type TerseState struct {
+	Session      string `json:"session"`
+	ActiveAgents int    `json:"active_agents"`
+	TotalAgents  int    `json:"total_agents"`
+	ReadyBeads   int    `json:"ready_beads"`
+	BlockedBeads int    `json:"blocked_beads"`
+	InProgress   int    `json:"in_progress_beads"`
+	UnreadMail   int    `json:"unread_mail"`
+	AlertCount   int    `json:"alert_count"`
+}
+
+// String returns the ultra-compact string representation.
+func (t TerseState) String() string {
+	return fmt.Sprintf("S:%s|A:%d/%d|R:%d|B:%d|I:%d|M:%d|!:%d",
+		t.Session, t.ActiveAgents, t.TotalAgents,
+		t.ReadyBeads, t.BlockedBeads, t.InProgress,
+		t.UnreadMail, t.AlertCount)
+}
+
+// ParseTerse parses the ultra-compact terse string into a TerseState.
+// Format: S:session|A:active/total|R:ready|B:blocked|I:in_progress|M:mail|!:alerts
+func ParseTerse(s string) (*TerseState, error) {
+	state := &TerseState{}
+
+	// Split by pipe
+	parts := strings.Split(s, "|")
+	for _, part := range parts {
+		kv := strings.SplitN(part, ":", 2)
+		if len(kv) != 2 {
+			continue
+		}
+		key, val := kv[0], kv[1]
+
+		switch key {
+		case "S":
+			state.Session = val
+		case "A":
+			// Parse "active/total" format
+			agentParts := strings.Split(val, "/")
+			if len(agentParts) == 2 {
+				fmt.Sscanf(agentParts[0], "%d", &state.ActiveAgents)
+				fmt.Sscanf(agentParts[1], "%d", &state.TotalAgents)
+			}
+		case "R":
+			fmt.Sscanf(val, "%d", &state.ReadyBeads)
+		case "B":
+			fmt.Sscanf(val, "%d", &state.BlockedBeads)
+		case "I":
+			fmt.Sscanf(val, "%d", &state.InProgress)
+		case "M":
+			fmt.Sscanf(val, "%d", &state.UnreadMail)
+		case "!":
+			fmt.Sscanf(val, "%d", &state.AlertCount)
+		}
+	}
+
+	return state, nil
+}
+
+// PrintTerse outputs ultra-compact single-line state for token-constrained scenarios.
+// Output format: S:session|A:active/total|R:ready|B:blocked|I:in_progress|M:mail|!:alerts
+// Multiple sessions are separated by semicolons.
+func PrintTerse(cfg *config.Config) error {
+	var results []string
+
+	// Get all sessions
+	sessions, err := tmux.ListSessions()
+	if err != nil {
+		// No sessions - output minimal state with just beads info
+		state := TerseState{Session: "-"}
+		if beads := bv.GetBeadsSummary(0); beads != nil {
+			state.ReadyBeads = beads.Ready
+			state.BlockedBeads = beads.Blocked
+			state.InProgress = beads.InProgress
+		}
+
+		// Get alert count
+		if cfg != nil {
+			alertCfg := alerts.ToConfigAlerts(
+				cfg.Alerts.Enabled,
+				cfg.Alerts.AgentStuckMinutes,
+				cfg.Alerts.DiskLowThresholdGB,
+				cfg.Alerts.MailBacklogThreshold,
+				cfg.Alerts.BeadStaleHours,
+				cfg.Alerts.ResolvedPruneMinutes,
+				cfg.ProjectsBase,
+			)
+			activeAlerts := alerts.GetActiveAlerts(alertCfg)
+			state.AlertCount = len(activeAlerts)
+		}
+
+		fmt.Println(state.String())
+		return nil
+	}
+
+	// Get beads summary (shared across sessions)
+	var beadsSummary *bv.BeadsSummary
+	if bv.IsInstalled() {
+		beadsSummary = bv.GetBeadsSummary(0)
+	}
+
+	// Get alert count
+	var alertCount int
+	if cfg != nil {
+		alertCfg := alerts.ToConfigAlerts(
+			cfg.Alerts.Enabled,
+			cfg.Alerts.AgentStuckMinutes,
+			cfg.Alerts.DiskLowThresholdGB,
+			cfg.Alerts.MailBacklogThreshold,
+			cfg.Alerts.BeadStaleHours,
+			cfg.Alerts.ResolvedPruneMinutes,
+			cfg.ProjectsBase,
+		)
+		activeAlerts := alerts.GetActiveAlerts(alertCfg)
+		alertCount = len(activeAlerts)
+	}
+
+	for _, sess := range sessions {
+		state := TerseState{
+			Session:    sess.Name,
+			AlertCount: alertCount, // Alerts are global, not per-session
+		}
+
+		// Get panes for this session
+		panes, err := tmux.GetPanes(sess.Name)
+		if err == nil {
+			state.TotalAgents = len(panes)
+			// Count active agents (non-user panes that are in active state)
+			for _, pane := range panes {
+				agentType := agentTypeString(pane.Type)
+				if agentType != "user" && agentType != "unknown" {
+					// Capture output to detect state
+					captured, err := tmux.CapturePaneOutput(pane.ID, 20)
+					if err == nil {
+						lines := splitLines(stripANSI(captured))
+						paneState := detectState(lines, pane.Title)
+						if paneState == "active" || paneState == "idle" {
+							state.ActiveAgents++
+						}
+					} else {
+						// Assume active if we can't capture
+						state.ActiveAgents++
+					}
+				}
+			}
+		}
+
+		// Add beads summary (same for all sessions in same project)
+		if beadsSummary != nil {
+			state.ReadyBeads = beadsSummary.Ready
+			state.BlockedBeads = beadsSummary.Blocked
+			state.InProgress = beadsSummary.InProgress
+		}
+
+		// TODO: Add mail count when agent-mail integration is available
+		// For now, mail count remains 0
+
+		results = append(results, state.String())
+	}
+
+	// Output all sessions separated by semicolons
+	fmt.Println(strings.Join(results, ";"))
+	return nil
 }

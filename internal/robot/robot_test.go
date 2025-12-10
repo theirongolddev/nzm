@@ -1473,3 +1473,158 @@ func TestStatusOutputWithGraphMetrics(t *testing.T) {
 		}
 	}
 }
+
+// ====================
+// Test TerseState
+// ====================
+
+func TestTerseStateString(t *testing.T) {
+	state := TerseState{
+		Session:      "myproject",
+		ActiveAgents: 2,
+		TotalAgents:  3,
+		ReadyBeads:   10,
+		BlockedBeads: 5,
+		InProgress:   2,
+		UnreadMail:   3,
+		AlertCount:   1,
+	}
+
+	expected := "S:myproject|A:2/3|R:10|B:5|I:2|M:3|!:1"
+	got := state.String()
+	if got != expected {
+		t.Errorf("TerseState.String() = %q, want %q", got, expected)
+	}
+}
+
+func TestTerseStateStringNoSession(t *testing.T) {
+	state := TerseState{
+		Session:      "-",
+		ActiveAgents: 0,
+		TotalAgents:  0,
+		ReadyBeads:   15,
+		BlockedBeads: 8,
+		InProgress:   3,
+		UnreadMail:   0,
+		AlertCount:   0,
+	}
+
+	expected := "S:-|A:0/0|R:15|B:8|I:3|M:0|!:0"
+	got := state.String()
+	if got != expected {
+		t.Errorf("TerseState.String() = %q, want %q", got, expected)
+	}
+}
+
+func TestParseTerse(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected TerseState
+	}{
+		{
+			name:  "full state",
+			input: "S:myproject|A:2/3|R:10|B:5|I:2|M:3|!:1",
+			expected: TerseState{
+				Session:      "myproject",
+				ActiveAgents: 2,
+				TotalAgents:  3,
+				ReadyBeads:   10,
+				BlockedBeads: 5,
+				InProgress:   2,
+				UnreadMail:   3,
+				AlertCount:   1,
+			},
+		},
+		{
+			name:  "no session",
+			input: "S:-|A:0/0|R:15|B:8|I:3|M:0|!:0",
+			expected: TerseState{
+				Session:      "-",
+				ActiveAgents: 0,
+				TotalAgents:  0,
+				ReadyBeads:   15,
+				BlockedBeads: 8,
+				InProgress:   3,
+				UnreadMail:   0,
+				AlertCount:   0,
+			},
+		},
+		{
+			name:  "large numbers",
+			input: "S:bigproject|A:50/100|R:1000|B:500|I:200|M:50|!:10",
+			expected: TerseState{
+				Session:      "bigproject",
+				ActiveAgents: 50,
+				TotalAgents:  100,
+				ReadyBeads:   1000,
+				BlockedBeads: 500,
+				InProgress:   200,
+				UnreadMail:   50,
+				AlertCount:   10,
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := ParseTerse(tc.input)
+			if err != nil {
+				t.Fatalf("ParseTerse(%q) failed: %v", tc.input, err)
+			}
+			if *result != tc.expected {
+				t.Errorf("ParseTerse(%q) = %+v, want %+v", tc.input, *result, tc.expected)
+			}
+		})
+	}
+}
+
+func TestTerseStateRoundTrip(t *testing.T) {
+	original := TerseState{
+		Session:      "test",
+		ActiveAgents: 5,
+		TotalAgents:  8,
+		ReadyBeads:   20,
+		BlockedBeads: 10,
+		InProgress:   5,
+		UnreadMail:   2,
+		AlertCount:   3,
+	}
+
+	str := original.String()
+	parsed, err := ParseTerse(str)
+	if err != nil {
+		t.Fatalf("ParseTerse failed: %v", err)
+	}
+
+	if *parsed != original {
+		t.Errorf("Round trip failed: original=%+v, parsed=%+v", original, *parsed)
+	}
+}
+
+func TestTerseStateMarshal(t *testing.T) {
+	state := TerseState{
+		Session:      "myproject",
+		ActiveAgents: 2,
+		TotalAgents:  3,
+		ReadyBeads:   10,
+		BlockedBeads: 5,
+		InProgress:   2,
+		UnreadMail:   3,
+		AlertCount:   1,
+	}
+
+	data, err := json.Marshal(state)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+
+	var result TerseState
+	if err := json.Unmarshal(data, &result); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+
+	if result != state {
+		t.Errorf("Marshal/Unmarshal round trip failed: got %+v, want %+v", result, state)
+	}
+}
