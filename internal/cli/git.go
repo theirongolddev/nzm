@@ -76,36 +76,36 @@ Examples:
 
 // GitSyncResult represents the result of a git sync operation.
 type GitSyncResult struct {
-	Success     bool         `json:"success"`
-	Session     string       `json:"session,omitempty"`
-	WorkingDir  string       `json:"working_dir"`
-	PullResult  *PullResult  `json:"pull_result,omitempty"`
-	PushResult  *PushResult  `json:"push_result,omitempty"`
-	HasConflict bool         `json:"has_conflict"`
-	Error       string       `json:"error,omitempty"`
+	Success     bool        `json:"success"`
+	Session     string      `json:"session,omitempty"`
+	WorkingDir  string      `json:"working_dir"`
+	PullResult  *PullResult `json:"pull_result,omitempty"`
+	PushResult  *PushResult `json:"push_result,omitempty"`
+	HasConflict bool        `json:"has_conflict"`
+	Error       string      `json:"error,omitempty"`
 }
 
 // PullResult contains the result of a git pull operation.
 type PullResult struct {
-	Success      bool     `json:"success"`
-	FastForward  bool     `json:"fast_forward"`
-	Behind       int      `json:"behind"`
-	Merged       int      `json:"merged"`
-	Files        []string `json:"files,omitempty"`
-	Conflicts    []string `json:"conflicts,omitempty"`
-	Error        string   `json:"error,omitempty"`
-	AlreadyUpToDate bool  `json:"already_up_to_date"`
+	Success         bool     `json:"success"`
+	FastForward     bool     `json:"fast_forward"`
+	Behind          int      `json:"behind"`
+	Merged          int      `json:"merged"`
+	Files           []string `json:"files,omitempty"`
+	Conflicts       []string `json:"conflicts,omitempty"`
+	Error           string   `json:"error,omitempty"`
+	AlreadyUpToDate bool     `json:"already_up_to_date"`
 }
 
 // PushResult contains the result of a git push operation.
 type PushResult struct {
-	Success   bool   `json:"success"`
-	Ahead     int    `json:"ahead"`
-	Pushed    int    `json:"pushed"`
-	Remote    string `json:"remote"`
-	Branch    string `json:"branch"`
-	Error     string `json:"error,omitempty"`
-	NothingToPush bool `json:"nothing_to_push"`
+	Success       bool   `json:"success"`
+	Ahead         int    `json:"ahead"`
+	Pushed        int    `json:"pushed"`
+	Remote        string `json:"remote"`
+	Branch        string `json:"branch"`
+	Error         string `json:"error,omitempty"`
+	NothingToPush bool   `json:"nothing_to_push"`
 }
 
 func runGitSync(session string, pullOnly, pushOnly, force, dryRun bool) error {
@@ -393,14 +393,14 @@ Examples:
 
 // GitStatusResult represents the combined git and Agent Mail status.
 type GitStatusResult struct {
-	Success      bool                       `json:"success"`
-	Session      string                     `json:"session,omitempty"`
-	WorkingDir   string                     `json:"working_dir"`
-	Git          *GitInfo                   `json:"git,omitempty"`
-	Reservations []agentmail.InboxMessage   `json:"reservations,omitempty"`
+	Success      bool                        `json:"success"`
+	Session      string                      `json:"session,omitempty"`
+	WorkingDir   string                      `json:"working_dir"`
+	Git          *GitInfo                    `json:"git,omitempty"`
+	Reservations []agentmail.InboxMessage    `json:"reservations,omitempty"`
 	Locks        []agentmail.FileReservation `json:"locks,omitempty"`
-	AgentMail    *AgentMailStatus           `json:"agent_mail,omitempty"`
-	Error        string                     `json:"error,omitempty"`
+	AgentMail    *AgentMailStatus            `json:"agent_mail,omitempty"`
+	Error        string                      `json:"error,omitempty"`
 }
 
 // GitInfo contains git repository information.
@@ -567,10 +567,7 @@ func parseGitStatus(info *GitInfo, output string) {
 }
 
 func fetchAgentLocks(ctx context.Context, client *agentmail.Client, projectKey, agentName string, allAgents bool) ([]agentmail.FileReservation, error) {
-	// Note: This is a simplified implementation. A full implementation would
-	// query the Agent Mail server for active reservations.
-	// For now, return empty as the full API may not be exposed.
-	return nil, nil
+	return client.ListReservations(ctx, projectKey, agentName, allAgents)
 }
 
 func printGitStatus(result GitStatusResult) error {

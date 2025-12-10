@@ -398,6 +398,32 @@ func (c *Client) RenewReservations(ctx context.Context, projectKey, agentName st
 	return err
 }
 
+// ListReservations lists active file reservations for a project (optionally filtered by agent).
+// If the Agent Mail server does not support this tool, callers will receive an error rather
+// than an empty slice so the CLI can surface the limitation instead of misreporting "no locks".
+func (c *Client) ListReservations(ctx context.Context, projectKey, agentName string, allAgents bool) ([]FileReservation, error) {
+	args := map[string]interface{}{
+		"project_key": projectKey,
+	}
+	if agentName != "" {
+		args["agent_name"] = agentName
+	}
+	if allAgents {
+		args["all_agents"] = true
+	}
+
+	result, err := c.callTool(ctx, "list_file_reservations", args)
+	if err != nil {
+		return nil, err
+	}
+
+	var reservations []FileReservation
+	if err := json.Unmarshal(result, &reservations); err != nil {
+		return nil, NewAPIError("list_file_reservations", 0, err)
+	}
+	return reservations, nil
+}
+
 // StartSession is a macro that starts a project session (ensure project, register agent, fetch inbox).
 func (c *Client) StartSession(ctx context.Context, projectKey, program, model, taskDescription string) (*SessionStartResult, error) {
 	args := map[string]interface{}{

@@ -104,8 +104,11 @@ func runLocks(session string, allAgents bool) error {
 }
 
 func fetchActiveReservations(ctx context.Context, client *agentmail.Client, projectKey, agentName string, allAgents bool) ([]agentmail.FileReservation, error) {
-	// Note: Needs ListReservations API endpoint - currently returns empty
-	return []agentmail.FileReservation{}, nil
+	reservations, err := client.ListReservations(ctx, projectKey, agentName, allAgents)
+	if err != nil {
+		return nil, fmt.Errorf("listing reservations: %w", err)
+	}
+	return reservations, nil
 }
 
 func printLocksResult(result LocksResult, allAgents bool) error {
