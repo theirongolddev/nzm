@@ -5,11 +5,12 @@ import (
 	"os"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/Dicklesworthstone/ntm/internal/clipboard"
 	"github.com/Dicklesworthstone/ntm/internal/codeblock"
 	"github.com/Dicklesworthstone/ntm/internal/output"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
-	"github.com/spf13/cobra"
 )
 
 // ExtractResponse is the JSON output format for extract command.
@@ -275,6 +276,7 @@ func handleExtractApply(blocks []codeblock.CodeBlock) error {
 	applied := 0
 	skipped := 0
 
+blockLoop:
 	for i, block := range blocks {
 		if block.FilePath == "" {
 			fmt.Printf("[%d] Skipped: no file path detected\n", i+1)
@@ -320,7 +322,7 @@ func handleExtractApply(blocks []codeblock.CodeBlock) error {
 			applied++
 		case "s", "skip":
 			fmt.Printf("Skipping remaining blocks\n")
-			break
+			break blockLoop
 		default:
 			fmt.Printf("    Skipped\n")
 			skipped++

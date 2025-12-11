@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/Dicklesworthstone/ntm/internal/agentmail"
 	"github.com/Dicklesworthstone/ntm/internal/cass"
 	"github.com/Dicklesworthstone/ntm/internal/config"
@@ -20,7 +22,6 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/recipe"
 	"github.com/Dicklesworthstone/ntm/internal/resilience"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
-	"github.com/spf13/cobra"
 )
 
 // SpawnOptions configures session creation and agent spawning
@@ -288,12 +289,8 @@ func spawnSessionLogic(opts SpawnOptions) error {
 		return outputError(err)
 	}
 
-	totalAgents := 0
-	for _, _ = range opts.Agents {
-		// Count plugin agents too
-		totalAgents++
-	}
-	// Or use explicit counts if populated manually (legacy path)
+	// Calculate total agents - either from Agents slice or explicit counts (legacy path)
+	var totalAgents int
 	if len(opts.Agents) == 0 {
 		totalAgents = opts.CCCount + opts.CodCount + opts.GmiCount
 		if totalAgents == 0 {
