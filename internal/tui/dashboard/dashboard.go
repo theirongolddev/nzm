@@ -1035,24 +1035,25 @@ func (m Model) View() string {
 	b.WriteString("\n")
 
 	// ═══════════════════════════════════════════════════════════════
-	// HEADER with animated banner
+	// HEADER with animated banner (centered)
 	// ═══════════════════════════════════════════════════════════════
 	bannerText := components.RenderBannerMedium(true, m.animTick)
-	b.WriteString(bannerText + "\n")
+	center := lipgloss.NewStyle().Width(m.width).Align(lipgloss.Center)
+	b.WriteString(center.Render(bannerText) + "\n")
 
 	// Session title with gradient
 	sessionTitle := ic.Session + "  " + m.session
 	animatedSession := styles.Shimmer(sessionTitle, m.animTick,
 		string(t.Blue), string(t.Lavender), string(t.Mauve))
-	b.WriteString("  " + animatedSession + "\n")
-	b.WriteString("  " + styles.GradientDivider(m.width-4,
+	b.WriteString(center.Render(animatedSession) + "\n")
+	b.WriteString(styles.GradientDivider(m.width,
 		string(t.Blue), string(t.Mauve)) + "\n\n")
 
 	// ═══════════════════════════════════════════════════════════════
 	// STATS BAR with agent counts
 	// ═══════════════════════════════════════════════════════════════
 	statsBar := m.renderStatsBar()
-	b.WriteString("  " + statsBar + "\n\n")
+	b.WriteString(center.Render(statsBar) + "\n\n")
 
 	// ═══════════════════════════════════════════════════════════════
 	// RATE LIMIT ALERT (if any agent is rate limited)

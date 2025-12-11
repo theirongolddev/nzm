@@ -27,3 +27,4 @@ vendor/
 # Test binaries
 *.test
 coverage.out
+dashboard_debug.txt

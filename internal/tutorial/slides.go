@@ -214,14 +214,8 @@ func (m Model) renderProblemSlide(tick int) string {
 		for i, problem := range problems {
 			revealTick := tick - 10 - i*8
 			if revealTick > 0 {
-				// Shake effect for emphasis
-				shake := ""
-				if revealTick < 10 && (revealTick/2)%2 == 0 {
-					shake = " "
-				}
-
 				colored := styles.GradientText(problem, "#f38ba8", "#fab387")
-				b.WriteString(shake + "    " + colored + "\n")
+				b.WriteString("    " + colored + "\n")
 			}
 		}
 	}

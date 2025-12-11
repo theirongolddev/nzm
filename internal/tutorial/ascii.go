@@ -251,18 +251,8 @@ func RenderAnimatedLogo(tick int, width int) string {
 func RenderAnimatedChaosDiagram(tick int, width int) string {
 	var lines []string
 
-	for i, line := range ChaosDiagram {
-		// Add slight horizontal shake
-		shakeOffset := 0
-		if tick%10 < 3 {
-			shakeOffset = (tick+i)%3 - 1
-		}
-
+	for _, line := range ChaosDiagram {
 		padding := (width - len(line)) / 2
-		if padding < 0 {
-			padding = 0
-		}
-		padding += shakeOffset
 		if padding < 0 {
 			padding = 0
 		}
