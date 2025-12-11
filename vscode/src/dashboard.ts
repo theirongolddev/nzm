@@ -45,10 +45,12 @@ export class NtmDashboard {
                 switch (message.command) {
                     case 'refresh':
                         this._update();
-                        return;
+                        break;
                     case 'spawn':
                         vscode.commands.executeCommand('ntm.spawn');
-                        return;
+                        break;
+                    default:
+                        break;
                 }
             },
             null,
