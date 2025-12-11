@@ -255,6 +255,7 @@ func BuildPaneTableRows(
 	paneStatus map[int]PaneStatus,
 	beads *bv.BeadsSummary,
 	fileChanges []tracker.RecordedFileChange,
+	tick int,
 ) []PaneTableRow {
 	changeCounts := fileChangesByPane(panes, fileChanges)
 
@@ -263,6 +264,7 @@ func BuildPaneTableRows(
 		st, hasStatus := statuses[pane.ID]
 		ps := paneStatus[pane.Index]
 		row := PaneTableRow{
+			Tick:          tick,
 			Index:         pane.Index,
 			Type:          string(pane.Type),
 			Variant:       pane.Variant,

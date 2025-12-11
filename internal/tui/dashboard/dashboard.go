@@ -319,7 +319,7 @@ func New(session string) Model {
 		session:         session,
 		width:           80,
 		height:          24,
-		tier:            layout.TierForWidth(80),
+		tier:            baselayout.TierForWidth(80),
 		theme:           t,
 		icons:           ic,
 		compaction:      status.NewCompactionRecoveryIntegrationDefault(),
@@ -676,9 +676,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.tier = layout.TierForWidth(msg.Width)
+		m.tier = baselayout.TierForWidth(msg.Width)
 
-		_, detailWidth := layout.SplitProportions(msg.Width)
+		_, detailWidth := baselayout.SplitProportions(msg.Width)
 		contentWidth := detailWidth - 4
 		if contentWidth < 20 {
 			contentWidth = 20
@@ -1785,7 +1785,7 @@ func (m Model) renderPaneList(width int) string {
 	lines = append(lines, RenderTableHeader(dims, t))
 
 	// Pane rows (hydrated with status, beads, file changes)
-	rows := BuildPaneTableRows(m.panes, m.agentStatuses, m.paneStatus, &m.beadsSummary, m.fileChanges)
+	rows := BuildPaneTableRows(m.panes, m.agentStatuses, m.paneStatus, &m.beadsSummary, m.fileChanges, m.animTick)
 	for i := range rows {
 		rows[i].IsSelected = i == m.cursor
 		lines = append(lines, RenderPaneRow(rows[i], dims, t))
