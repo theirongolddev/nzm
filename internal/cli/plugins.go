@@ -6,9 +6,10 @@ import (
 	"path/filepath"
 	"text/tabwriter"
 
+	"github.com/spf13/cobra"
+
 	"github.com/Dicklesworthstone/ntm/internal/config"
 	"github.com/Dicklesworthstone/ntm/internal/plugins"
-	"github.com/spf13/cobra"
 )
 
 func newPluginsCmd() *cobra.Command {

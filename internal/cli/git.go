@@ -9,8 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dicklesworthstone/ntm/internal/agentmail"
 	"github.com/spf13/cobra"
+
+	"github.com/Dicklesworthstone/ntm/internal/agentmail"
 )
 
 func newGitCmd() *cobra.Command {

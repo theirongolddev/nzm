@@ -13,9 +13,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/Dicklesworthstone/ntm/internal/agentmail"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
-	"github.com/spf13/cobra"
 )
 
 func newMailCmd() *cobra.Command {

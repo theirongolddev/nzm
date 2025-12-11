@@ -11,6 +11,7 @@ import (
 	"text/template"
 
 	"github.com/BurntSushi/toml"
+
 	"github.com/Dicklesworthstone/ntm/internal/notify"
 )
 

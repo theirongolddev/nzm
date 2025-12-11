@@ -11,8 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Dicklesworthstone/ntm/internal/agentmail"
 	"github.com/spf13/cobra"
+
+	"github.com/Dicklesworthstone/ntm/internal/agentmail"
 )
 
 // MockMailClient implements MailClient interface for testing

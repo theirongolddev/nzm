@@ -7,10 +7,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/Dicklesworthstone/ntm/internal/output"
 	"github.com/Dicklesworthstone/ntm/internal/tracker"
 	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
-	"github.com/spf13/cobra"
 )
 
 func newChangesCmd() *cobra.Command {

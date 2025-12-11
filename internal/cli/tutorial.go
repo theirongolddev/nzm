@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Dicklesworthstone/ntm/internal/tutorial"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
+
+	"github.com/Dicklesworthstone/ntm/internal/tutorial"
 )
 
 func newTutorialCmd() *cobra.Command {

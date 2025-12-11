@@ -9,10 +9,11 @@ import (
 
 	"encoding/json"
 
+	"github.com/spf13/cobra"
+
 	"github.com/Dicklesworthstone/ntm/internal/history"
 	"github.com/Dicklesworthstone/ntm/internal/output"
 	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
-	"github.com/spf13/cobra"
 )
 
 func newHistoryCmd() *cobra.Command {

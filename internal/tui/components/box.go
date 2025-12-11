@@ -3,8 +3,9 @@ package components
 import (
 	"strings"
 
-	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
 )
 
 // BoxStyle defines the visual style of a box

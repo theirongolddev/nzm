@@ -3,9 +3,10 @@ package components
 import (
 	"strings"
 
-	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/reflow/wordwrap"
+
+	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
 )
 
 // Preview is a content preview pane component

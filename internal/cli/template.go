@@ -7,8 +7,9 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/Dicklesworthstone/ntm/internal/templates"
 	"github.com/spf13/cobra"
+
+	"github.com/Dicklesworthstone/ntm/internal/templates"
 )
 
 func newTemplateCmd() *cobra.Command {

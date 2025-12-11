@@ -7,9 +7,10 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/Dicklesworthstone/ntm/internal/persona"
 	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
-	"github.com/spf13/cobra"
 )
 
 func newPersonasCmd() *cobra.Command {

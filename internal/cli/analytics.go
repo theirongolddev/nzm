@@ -9,9 +9,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/Dicklesworthstone/ntm/internal/events"
 	"github.com/Dicklesworthstone/ntm/internal/output"
-	"github.com/spf13/cobra"
 )
 
 // AnalyticsStats holds aggregated analytics data.

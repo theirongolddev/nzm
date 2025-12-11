@@ -3,9 +3,10 @@ package components
 import (
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
+
 	"github.com/Dicklesworthstone/ntm/internal/tui/styles"
 	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
-	"github.com/charmbracelet/lipgloss"
 )
 
 // ASCII art logos for NTM

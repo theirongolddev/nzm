@@ -6,9 +6,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Dicklesworthstone/ntm/internal/health"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
+
+	"github.com/Dicklesworthstone/ntm/internal/health"
 )
 
 func newHealthCmd() *cobra.Command {

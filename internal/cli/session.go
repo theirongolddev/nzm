@@ -10,6 +10,9 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/spf13/cobra"
+	"golang.org/x/term"
+
 	"github.com/Dicklesworthstone/ntm/internal/agentmail"
 	"github.com/Dicklesworthstone/ntm/internal/output"
 	"github.com/Dicklesworthstone/ntm/internal/status"
@@ -17,8 +20,6 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/tui/icons"
 	"github.com/Dicklesworthstone/ntm/internal/tui/layout"
 	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
-	"github.com/spf13/cobra"
-	"golang.org/x/term"
 )
 
 func newAttachCmd() *cobra.Command {

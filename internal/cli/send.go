@@ -10,6 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mattn/go-isatty"
+	"github.com/spf13/cobra"
+
 	"github.com/Dicklesworthstone/ntm/internal/cass"
 	"github.com/Dicklesworthstone/ntm/internal/checkpoint"
 	"github.com/Dicklesworthstone/ntm/internal/events"
@@ -19,8 +22,6 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/templates"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
 	"github.com/Dicklesworthstone/ntm/internal/tracker"
-	"github.com/mattn/go-isatty"
-	"github.com/spf13/cobra"
 )
 
 // SendResult is the JSON output for the send command.

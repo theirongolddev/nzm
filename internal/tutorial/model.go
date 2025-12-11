@@ -4,10 +4,11 @@ package tutorial
 import (
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/Dicklesworthstone/ntm/internal/tui/icons"
 	"github.com/Dicklesworthstone/ntm/internal/tui/layout"
 	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
-	tea "github.com/charmbracelet/bubbletea"
 )
 
 // TickMsg is sent on each animation frame

@@ -7,8 +7,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/Dicklesworthstone/ntm/internal/agentmail"
 	"github.com/spf13/cobra"
+
+	"github.com/Dicklesworthstone/ntm/internal/agentmail"
 )
 
 func newUnlockCmd() *cobra.Command {

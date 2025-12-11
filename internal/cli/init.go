@@ -5,8 +5,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Dicklesworthstone/ntm/internal/config"
 	"github.com/spf13/cobra"
+
+	"github.com/Dicklesworthstone/ntm/internal/config"
 )
 
 func newInitCmd() *cobra.Command {

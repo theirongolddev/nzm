@@ -7,8 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
 	"github.com/spf13/cobra"
+
+	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
 )
 
 func newBindCmd() *cobra.Command {
