@@ -50,6 +50,36 @@ export interface StatusSummary {
     attached_count: number;
 }
 
+export interface RobotMail {
+    generated_at: string;
+    project_key?: string;
+    available: boolean;
+    server_url?: string;
+    agents?: MailAgent[];
+    locks?: MailLock[];
+    error?: string;
+}
+
+export interface MailAgent {
+    name: string;
+    program?: string;
+    model?: string;
+    unread_count?: number;
+    urgent_count?: number;
+    last_active_ts?: string;
+}
+
+export interface MailLock {
+    id: number;
+    path_pattern: string;
+    agent_name: string;
+    exclusive: boolean;
+    reason?: string;
+    expires_ts?: string;
+    created_ts?: string;
+    released_ts?: string | null;
+}
+
 export class NtmClient {
     private binaryPath: string;
 
@@ -62,8 +92,8 @@ export class NtmClient {
         return new Promise((resolve, reject) => {
             cp.execFile(this.binaryPath, args, (err, stdout, stderr) => {
                 if (err) {
-                    console.error(`NTM Error: ${err.message}`);
-                    reject(err);
+                    const detail = stderr ? `: ${stderr}` : '';
+                    reject(new Error(`ntm ${args.join(' ')} failed${detail}`));
                     return;
                 }
                 resolve(stdout);
@@ -105,6 +135,15 @@ export class NtmClient {
             return true;
         } catch {
             return false;
+        }
+    }
+
+    async getMail(): Promise<RobotMail> {
+        try {
+            const stdout = await this.run(['--robot-mail']);
+            return JSON.parse(stdout);
+        } catch (e) {
+            throw new Error(`Failed to get mail state: ${e}`);
         }
     }
 }
