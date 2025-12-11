@@ -183,7 +183,7 @@ func TestRunMailInbox(t *testing.T) {
 			// runMailInbox uses IsJSONOutput() which reads a global variable.
 			// We assume text output for these tests.
 
-			err := runMailInbox(cmd, tt.client, tt.session, tt.sessionAgents, tt.agentFilter, tt.urgent, 10)
+			err := runMailInbox(cmd, tt.client, tt.session, tt.sessionAgents, tt.agentFilter, tt.urgent, 10, false)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("runMailInbox() error = %v, wantErr %v", err, tt.wantErr)
 				return

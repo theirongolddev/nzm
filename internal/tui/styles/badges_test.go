@@ -166,6 +166,58 @@ func TestIssueTypeBadge(t *testing.T) {
 	}
 }
 
+func TestModelBadge(t *testing.T) {
+	models := []struct {
+		model string
+		want  string
+	}{
+		{"claude-3-opus", "opus"},
+		{"gpt-4o-mini", "4o"},
+		{"gemini-1.5-pro", "g1.5"},
+		{"unknown-model", "unknown-model"},
+	}
+
+	for _, tt := range models {
+		t.Run(tt.model, func(t *testing.T) {
+			result := ModelBadge(tt.model)
+			if result == "" {
+				t.Errorf("ModelBadge(%q) returned empty string", tt.model)
+			}
+			if !strings.Contains(result, tt.want) {
+				t.Errorf("ModelBadge(%q) should contain %q", tt.model, tt.want)
+			}
+		})
+	}
+}
+
+func TestTokenVelocityBadge(t *testing.T) {
+	values := []float64{0, 1500, 4500, 9000}
+	for _, v := range values {
+		result := TokenVelocityBadge(v)
+		if result == "" {
+			t.Errorf("TokenVelocityBadge(%f) returned empty string", v)
+		}
+		if !strings.Contains(result, "tpm") {
+			t.Errorf("TokenVelocityBadge(%f) should contain tpm", v)
+		}
+	}
+}
+
+func TestAlertSeverityBadge(t *testing.T) {
+	severities := []string{"critical", "high", "medium", "low", "info", "other"}
+	for _, sev := range severities {
+		t.Run(sev, func(t *testing.T) {
+			result := AlertSeverityBadge(sev)
+			if result == "" {
+				t.Errorf("AlertSeverityBadge(%q) returned empty string", sev)
+			}
+			if !strings.Contains(strings.ToLower(result), strings.ToLower(sev)) && sev != "other" {
+				t.Errorf("AlertSeverityBadge(%q) should include the severity label", sev)
+			}
+		})
+	}
+}
+
 func TestBadgeOptions(t *testing.T) {
 	// Test with different badge styles
 	opts := []BadgeOptions{

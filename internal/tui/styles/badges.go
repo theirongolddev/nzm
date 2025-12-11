@@ -440,6 +440,162 @@ func IssueTypeBadge(issueType string, opts ...BadgeOptions) string {
 	return renderBadge(text, bgColor, t.Base, opt)
 }
 
+// ModelBadge renders a badge for a model/variant (Claude/OpenAI/Gemini).
+// Examples:
+//
+//	"claude-3-opus"   -> "opus" (Claude color)
+//	"gpt-4o-mini"     -> "4o"   (OpenAI color)
+//	"gemini-1.5-pro"  -> "g1.5" (Gemini color)
+func ModelBadge(model string, opts ...BadgeOptions) string {
+	t := theme.Current()
+	ic := icons.Current()
+	opt := DefaultBadgeOptions()
+	if len(opts) > 0 {
+		opt = opts[0]
+	}
+
+	lower := strings.ToLower(model)
+
+	var (
+		bgColor lipgloss.Color
+		icon    string
+		label   string
+	)
+
+	switch {
+	case strings.Contains(lower, "claude"):
+		bgColor = t.Claude
+		icon = ic.Claude
+		switch {
+		case strings.Contains(lower, "opus"):
+			label = "opus"
+		case strings.Contains(lower, "sonnet"):
+			label = "sonnet"
+		case strings.Contains(lower, "haiku"):
+			label = "haiku"
+		default:
+			label = "claude"
+		}
+	case strings.Contains(lower, "gpt"):
+		bgColor = t.Codex
+		icon = ic.Codex
+		switch {
+		case strings.Contains(lower, "4.1"):
+			label = "4.1"
+		case strings.Contains(lower, "4o"):
+			label = "4o"
+		case strings.Contains(lower, "4"):
+			label = "4"
+		case strings.Contains(lower, "3.5"):
+			label = "3.5"
+		default:
+			label = "gpt"
+		}
+	case strings.Contains(lower, "gemini"):
+		bgColor = t.Gemini
+		icon = ic.Gemini
+		switch {
+		case strings.Contains(lower, "1.5"):
+			label = "g1.5"
+		case strings.Contains(lower, "1.0"):
+			label = "g1.0"
+		default:
+			label = "gemini"
+		}
+	default:
+		bgColor = t.Overlay
+		icon = "⋯"
+		label = model
+	}
+
+	text := label
+	if opt.ShowIcon && icon != "" {
+		text = icon + " " + label
+	}
+
+	return renderBadge(text, bgColor, t.Base, opt)
+}
+
+// TokenVelocityBadge renders a badge for token velocity (tokens per minute).
+// Example output: "⚡ 2400 tpm"
+func TokenVelocityBadge(tokensPerMinute float64, opts ...BadgeOptions) string {
+	t := theme.Current()
+	opt := DefaultBadgeOptions()
+	if len(opts) > 0 {
+		opt = opts[0]
+	}
+
+	value := tokensPerMinute
+	if value < 0 {
+		value = 0
+	}
+
+	var bgColor lipgloss.Color
+	switch {
+	case value >= 8000:
+		bgColor = t.Red
+	case value >= 4000:
+		bgColor = t.Yellow
+	default:
+		bgColor = t.Green
+	}
+
+	label := fmt.Sprintf("%.0f tpm", value)
+	if opt.ShowIcon {
+		label = "⚡ " + label
+	}
+
+	return renderBadge(label, bgColor, t.Base, opt)
+}
+
+// AlertSeverityBadge renders a badge for alert severity levels.
+// severity: critical|high|medium|low|info (case-insensitive)
+func AlertSeverityBadge(severity string, opts ...BadgeOptions) string {
+	t := theme.Current()
+	opt := DefaultBadgeOptions()
+	if len(opts) > 0 {
+		opt = opts[0]
+	}
+
+	lower := strings.ToLower(severity)
+
+	var (
+		bgColor lipgloss.Color
+		icon    string
+		label   string
+	)
+
+	switch lower {
+	case "critical", "crit", "sev0", "p0":
+		bgColor = t.Error
+		icon = "‼"
+		label = "critical"
+	case "high", "sev1", "p1":
+		bgColor = t.Warning
+		icon = "⚠"
+		label = "high"
+	case "medium", "med", "sev2", "p2":
+		bgColor = t.Yellow
+		icon = "▲"
+		label = "medium"
+	case "low", "sev3", "p3":
+		bgColor = t.Blue
+		icon = "▼"
+		label = "low"
+	default:
+		bgColor = t.Surface1
+		icon = "ℹ"
+		label = "info"
+	}
+
+	text := label
+	if opt.ShowIcon && icon != "" {
+		text = icon + " " + label
+	}
+
+	return renderBadge(text, bgColor, t.Base, opt)
+}
+
 // MiniBar renders a compact, fixed-width bar (typically 4–8 chars) for inline metrics.
 // Value is clamped to [0,1]. Palette can override default colors and glyphs.
 func MiniBar(value float64, width int, palettes ...MiniBarPalette) string {

@@ -16,7 +16,7 @@ func TestPaneMatchesSelector(t *testing.T) {
 	}{
 		{"3", true},   // index
 		{"%12", true}, // full id
-		{"12", true},  // id without %
+		{"12", false}, // numeric selector hits index first, so no match on id
 		{"2", false},
 		{"1.2", true}, // suffix match
 		{"garbage", false},

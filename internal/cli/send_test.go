@@ -78,7 +78,14 @@ func TestSendRealSession(t *testing.T) {
 	targets := SendTargets{} // Empty targets = default behavior (all agents)
 
 	// Send to all agents (skip user pane default)
-	err = runSendWithTargets(sessionName, prompt, targets, false, true, -1, "", nil)
+	err = runSendWithTargets(SendOptions{
+		Session:   sessionName,
+		Prompt:    prompt,
+		Targets:   targets,
+		TargetAll: true,
+		SkipFirst: false,
+		PaneIndex: -1,
+	})
 	if err != nil {
 		t.Fatalf("runSendWithTargets failed: %v", err)
 	}
