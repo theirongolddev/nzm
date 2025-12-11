@@ -8,6 +8,7 @@ import (
 	"strings"
 	"text/tabwriter"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Dicklesworthstone/ntm/internal/agentmail"
 	"github.com/Dicklesworthstone/ntm/internal/output"
@@ -367,7 +368,7 @@ func runStatus(w io.Writer, session string, tags []string) error {
 
 	// Text output
 	t := theme.Current()
-	
+
 	// ANSI helpers
 	const reset = "\033[0m"
 	const bold = "\033[1m"
@@ -382,7 +383,7 @@ func runStatus(w io.Writer, session string, tags []string) error {
 	claude := colorize(t.Claude)
 	codex := colorize(t.Codex)
 	gemini := colorize(t.Gemini)
-	
+
 	ic := icons.Current()
 
 	// Detect terminal width and layout tier
@@ -485,6 +486,10 @@ func runStatus(w io.Writer, session string, tags []string) error {
 			titleWidth = 15
 			variantWidth = 0
 			cmdWidth = 10
+		}
+
+		if actual := utf8.RuneCountInString(p.Title); actual > titleWidth {
+			titleWidth = actual
 		}
 
 		title := layout.TruncateRunes(p.Title, titleWidth, "…")
