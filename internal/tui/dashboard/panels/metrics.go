@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/Dicklesworthstone/ntm/internal/tui/layout"
 	"github.com/Dicklesworthstone/ntm/internal/tui/styles"
 	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
 )
@@ -144,10 +145,7 @@ func (m *MetricsPanel) View() string {
 			Foreground(t.Red).
 			Italic(true).
 			Padding(0, 1)
-		errMsg := m.err.Error()
-		if len(errMsg) > w-4 {
-			errMsg = errMsg[:w-7] + "..."
-		}
+		errMsg := layout.TruncateRunes(m.err.Error(), w-6, "…")
 		content.WriteString(errorStyle.Render("⚠ "+errMsg) + "\n")
 	}
 	content.WriteString("\n")

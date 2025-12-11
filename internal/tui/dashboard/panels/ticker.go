@@ -100,20 +100,19 @@ func (m *TickerPanel) View() string {
 		return ""
 	}
 
-	// Build ticker segments
-	segments := m.buildSegments()
+	// Build ticker segments as plain text first (no ANSI codes)
+	// This allows proper scrolling without corrupting escape sequences
+	plainSegments := m.buildPlainSegments()
+	plainText := strings.Join(plainSegments, " | ")
 
-	// Join all segments with separator
-	separator := lipgloss.NewStyle().
-		Foreground(t.Surface2).
-		Render(" | ")
+	// Calculate visible portion based on scroll offset using plain text
+	visiblePlain := m.scrollPlainText(plainText)
 
-	fullText := strings.Join(segments, separator)
+	// Now style the visible portion
+	// We need to re-apply styling to the visible text
+	styledText := m.styleVisibleText(visiblePlain)
 
-	// Calculate visible portion based on scroll offset
-	visibleText := m.scrollText(fullText)
-
-	// Style the ticker bar
+	// Style the ticker bar container
 	tickerStyle := lipgloss.NewStyle().
 		Width(m.width).
 		Background(t.Surface0).
@@ -125,7 +124,7 @@ func (m *TickerPanel) View() string {
 			BorderForeground(t.Primary)
 	}
 
-	return tickerStyle.Render(visibleText)
+	return tickerStyle.Render(styledText)
 }
 
 // buildSegments creates the ticker content segments
@@ -319,7 +318,191 @@ func (m *TickerPanel) buildMailSegment(t theme.Theme) string {
 	return mailLabel + ": " + strings.Join(mailParts, " ")
 }
 
-// scrollText handles the horizontal scrolling animation
+// buildPlainSegments creates plain text segments without ANSI styling
+func (m *TickerPanel) buildPlainSegments() []string {
+	var segments []string
+
+	// Fleet segment (plain)
+	fleetSegment := m.buildPlainFleetSegment()
+	segments = append(segments, fleetSegment)
+
+	// Alerts segment (plain)
+	alertsSegment := m.buildPlainAlertsSegment()
+	segments = append(segments, alertsSegment)
+
+	// Beads segment (plain)
+	beadsSegment := m.buildPlainBeadsSegment()
+	segments = append(segments, beadsSegment)
+
+	// Mail segment (plain)
+	mailSegment := m.buildPlainMailSegment()
+	segments = append(segments, mailSegment)
+
+	return segments
+}
+
+// buildPlainFleetSegment creates plain text fleet segment
+func (m *TickerPanel) buildPlainFleetSegment() string {
+	var parts []string
+
+	activeStatus := fmt.Sprintf("Fleet: %d/%d", m.data.ActiveAgents, m.data.TotalAgents)
+	parts = append(parts, activeStatus)
+
+	if m.data.TotalAgents > 0 {
+		var agentParts []string
+		if m.data.ClaudeCount > 0 {
+			agentParts = append(agentParts, fmt.Sprintf("C:%d", m.data.ClaudeCount))
+		}
+		if m.data.CodexCount > 0 {
+			agentParts = append(agentParts, fmt.Sprintf("X:%d", m.data.CodexCount))
+		}
+		if m.data.GeminiCount > 0 {
+			agentParts = append(agentParts, fmt.Sprintf("G:%d", m.data.GeminiCount))
+		}
+		if len(agentParts) > 0 {
+			parts = append(parts, "("+strings.Join(agentParts, " ")+")")
+		}
+	}
+
+	return strings.Join(parts, " ")
+}
+
+// buildPlainAlertsSegment creates plain text alerts segment
+func (m *TickerPanel) buildPlainAlertsSegment() string {
+	totalAlerts := m.data.CriticalAlerts + m.data.WarningAlerts + m.data.InfoAlerts
+
+	if totalAlerts == 0 {
+		return "Alerts: OK"
+	}
+
+	var alertParts []string
+	if m.data.CriticalAlerts > 0 {
+		alertParts = append(alertParts, fmt.Sprintf("%d!", m.data.CriticalAlerts))
+	}
+	if m.data.WarningAlerts > 0 {
+		alertParts = append(alertParts, fmt.Sprintf("%dw", m.data.WarningAlerts))
+	}
+	if m.data.InfoAlerts > 0 {
+		alertParts = append(alertParts, fmt.Sprintf("%di", m.data.InfoAlerts))
+	}
+
+	return "Alerts: " + strings.Join(alertParts, "/")
+}
+
+// buildPlainBeadsSegment creates plain text beads segment
+func (m *TickerPanel) buildPlainBeadsSegment() string {
+	var beadParts []string
+
+	beadParts = append(beadParts, fmt.Sprintf("R:%d", m.data.ReadyBeads))
+
+	if m.data.InProgressBeads > 0 {
+		beadParts = append(beadParts, fmt.Sprintf("I:%d", m.data.InProgressBeads))
+	}
+	if m.data.BlockedBeads > 0 {
+		beadParts = append(beadParts, fmt.Sprintf("B:%d", m.data.BlockedBeads))
+	}
+
+	return "Beads: " + strings.Join(beadParts, " ")
+}
+
+// buildPlainMailSegment creates plain text mail segment
+func (m *TickerPanel) buildPlainMailSegment() string {
+	if !m.data.MailConnected {
+		return "Mail: offline"
+	}
+
+	var mailParts []string
+
+	if m.data.UnreadMessages > 0 {
+		mailParts = append(mailParts, fmt.Sprintf("%d unread", m.data.UnreadMessages))
+	} else {
+		mailParts = append(mailParts, "0 unread")
+	}
+
+	if m.data.ActiveLocks > 0 {
+		mailParts = append(mailParts, fmt.Sprintf("%d locks", m.data.ActiveLocks))
+	}
+
+	return "Mail: " + strings.Join(mailParts, " ")
+}
+
+// scrollPlainText handles the horizontal scrolling animation on plain text
+func (m *TickerPanel) scrollPlainText(text string) string {
+	textRunes := []rune(text)
+	textLen := len(textRunes)
+
+	// If text fits in width, center it
+	if textLen <= m.width {
+		padding := (m.width - textLen) / 2
+		return strings.Repeat(" ", padding) + text + strings.Repeat(" ", m.width-textLen-padding)
+	}
+
+	// For scrolling, duplicate text for seamless loop
+	paddedText := text + "    " + text
+	paddedRunes := []rune(paddedText)
+	paddedLen := len(paddedRunes)
+
+	// Calculate scroll position (wrap around)
+	scrollPos := m.offset % (textLen + 4)
+
+	// Extract visible portion
+	endPos := scrollPos + m.width
+	if endPos > paddedLen {
+		endPos = paddedLen
+	}
+
+	visible := string(paddedRunes[scrollPos:endPos])
+
+	// Pad if needed
+	visibleLen := len([]rune(visible))
+	if visibleLen < m.width {
+		visible += strings.Repeat(" ", m.width-visibleLen)
+	}
+
+	return visible
+}
+
+// styleVisibleText applies styling to visible plain text
+// This is a simplified styling that applies colors to known keywords
+func (m *TickerPanel) styleVisibleText(text string) string {
+	t := m.theme
+
+	// Apply styling to known patterns
+	// Note: This is a simplified approach - it styles keywords in-place
+	result := text
+
+	// Style "Fleet:" label
+	fleetLabel := lipgloss.NewStyle().Foreground(t.Blue).Bold(true).Render("Fleet:")
+	result = strings.Replace(result, "Fleet:", fleetLabel, 1)
+
+	// Style "Alerts:" label
+	alertsLabel := lipgloss.NewStyle().Foreground(t.Pink).Bold(true).Render("Alerts:")
+	result = strings.Replace(result, "Alerts:", alertsLabel, 1)
+
+	// Style "Beads:" label
+	beadsLabel := lipgloss.NewStyle().Foreground(t.Green).Bold(true).Render("Beads:")
+	result = strings.Replace(result, "Beads:", beadsLabel, 1)
+
+	// Style "Mail:" label
+	mailLabel := lipgloss.NewStyle().Foreground(t.Lavender).Bold(true).Render("Mail:")
+	result = strings.Replace(result, "Mail:", mailLabel, 1)
+
+	// Style separators
+	sepStyled := lipgloss.NewStyle().Foreground(t.Surface2).Render(" | ")
+	result = strings.ReplaceAll(result, " | ", sepStyled)
+
+	// Style "OK" in green
+	okStyled := lipgloss.NewStyle().Foreground(t.Green).Render("OK")
+	result = strings.Replace(result, " OK", " "+okStyled, 1)
+
+	// Style "offline" in dim
+	offlineStyled := lipgloss.NewStyle().Foreground(t.Overlay).Italic(true).Render("offline")
+	result = strings.Replace(result, "offline", offlineStyled, 1)
+
+	return result
+}
+
+// scrollText handles the horizontal scrolling animation (kept for backward compatibility)
 func (m *TickerPanel) scrollText(text string) string {
 	// Get the display width of the text (using rune count as approximation)
 	textRunes := []rune(text)

@@ -116,10 +116,7 @@ func (m *AlertsPanel) View() string {
 			Foreground(t.Red).
 			Italic(true).
 			Padding(0, 1)
-		errMsg := m.err.Error()
-		if len(errMsg) > w-4 {
-			errMsg = errMsg[:w-7] + "..."
-		}
+		errMsg := layout.TruncateRunes(m.err.Error(), w-6, "…")
 		content.WriteString(errorStyle.Render("⚠ "+errMsg) + "\n\n")
 	}
 
