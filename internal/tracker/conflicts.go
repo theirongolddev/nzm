@@ -34,19 +34,28 @@ func DetectConflicts(changes []RecordedFileChange) []Conflict {
 				}
 			}
 
-			if len(allAgents) > 1 {
-				agentList := make([]string, 0, len(allAgents))
-				for agent := range allAgents {
-					agentList = append(agentList, agent)
-				}
-				
-				conflicts = append(conflicts, Conflict{
-					Path:     path,
-					Changes:  pathChanges,
-					Severity: "warning",
-					Agents:   agentList,
-				})
+			if len(allAgents) <= 1 {
+				continue
 			}
+
+			agentList := make([]string, 0, len(allAgents))
+			var last time.Time
+			for agent := range allAgents {
+				agentList = append(agentList, agent)
+			}
+			for _, pc := range pathChanges {
+				if pc.Timestamp.After(last) {
+					last = pc.Timestamp
+				}
+			}
+
+			conflicts = append(conflicts, Conflict{
+				Path:     path,
+				Changes:  pathChanges,
+				Severity: conflictSeverity(pathChanges, len(allAgents)),
+				Agents:   agentList,
+				LastAt:   last,
+			})
 		}
 	}
 	return conflicts
@@ -61,7 +70,6 @@ func DetectConflictsRecent(window time.Duration) []Conflict {
 // ConflictsSince returns files changed by more than one agent since the timestamp.
 func ConflictsSince(ts time.Time, session string) []Conflict {
 	changes := GlobalFileChanges.Since(ts)
-	// Filter by session if provided
 	var filtered []RecordedFileChange
 	for _, c := range changes {
 		if session != "" && c.Session != session {
@@ -70,4 +78,27 @@ func ConflictsSince(ts time.Time, session string) []Conflict {
 		filtered = append(filtered, c)
 	}
 	return DetectConflicts(filtered)
+}
+
+// conflictSeverity classifies severity using simple heuristics:
+// - critical if three or more agents touched the file
+// - critical if edits occurred within a 10-minute window
+// otherwise warning.
+func conflictSeverity(pathChanges []RecordedFileChange, agentCount int) string {
+	if agentCount >= 3 {
+		return "critical"
+	}
+	var minT, maxT time.Time
+	for i, c := range pathChanges {
+		if i == 0 || c.Timestamp.Before(minT) {
+			minT = c.Timestamp
+		}
+		if c.Timestamp.After(maxT) {
+			maxT = c.Timestamp
+		}
+	}
+	if maxT.Sub(minT) <= 10*time.Minute {
+		return "critical"
+	}
+	return "warning"
 }
