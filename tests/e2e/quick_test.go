@@ -11,6 +11,17 @@ import (
 	"github.com/Dicklesworthstone/ntm/tests/testutil"
 )
 
+func writeProjectsBaseConfig(t *testing.T, projectsBase string) string {
+	t.Helper()
+
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	content := fmt.Sprintf("projects_base = %q\n", projectsBase)
+	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+	return configPath
+}
+
 // TestQuickSetupGo tests ntm quick with Go template creates correct scaffolding.
 func TestQuickSetupGo(t *testing.T) {
 	testutil.RequireNTMBinary(t)
@@ -18,24 +29,13 @@ func TestQuickSetupGo(t *testing.T) {
 	logger := testutil.NewTestLoggerStdout(t)
 	projectName := fmt.Sprintf("ntm_e2e_test_go_%d", time.Now().UnixNano())
 
-	// Determine expected project path
-	home, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatalf("failed to get home dir: %v", err)
-	}
-	projectDir := filepath.Join(home, "projects", projectName)
-
-	// Clean up after test
-	t.Cleanup(func() {
-		logger.Log("CLEANUP: Removing %s", projectDir)
-		if err := os.RemoveAll(projectDir); err != nil {
-			t.Logf("cleanup warning: %v", err)
-		}
-	})
+	projectsBase := t.TempDir()
+	configPath := writeProjectsBaseConfig(t, projectsBase)
+	projectDir := filepath.Join(projectsBase, projectName)
 
 	// Run ntm quick with Go template
 	logger.LogSection("Creating Go project with ntm quick")
-	out := testutil.AssertCommandSuccess(t, logger, "ntm", "quick", projectName, "--template=go")
+	out := testutil.AssertCommandSuccess(t, logger, "ntm", "--config", configPath, "quick", projectName, "--template=go")
 	logger.Log("OUTPUT:\n%s", string(out))
 
 	// Verify project directory was created
@@ -78,19 +78,12 @@ func TestQuickSetupPython(t *testing.T) {
 	logger := testutil.NewTestLoggerStdout(t)
 	projectName := fmt.Sprintf("ntm_e2e_test_python_%d", time.Now().UnixNano())
 
-	home, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatalf("failed to get home dir: %v", err)
-	}
-	projectDir := filepath.Join(home, "projects", projectName)
-
-	t.Cleanup(func() {
-		logger.Log("CLEANUP: Removing %s", projectDir)
-		os.RemoveAll(projectDir)
-	})
+	projectsBase := t.TempDir()
+	configPath := writeProjectsBaseConfig(t, projectsBase)
+	projectDir := filepath.Join(projectsBase, projectName)
 
 	logger.LogSection("Creating Python project with ntm quick")
-	out := testutil.AssertCommandSuccess(t, logger, "ntm", "quick", projectName, "--template=python")
+	out := testutil.AssertCommandSuccess(t, logger, "ntm", "--config", configPath, "quick", projectName, "--template=python")
 	logger.Log("OUTPUT:\n%s", string(out))
 
 	logger.LogSection("Verifying project structure")
@@ -123,19 +116,12 @@ func TestQuickSetupNode(t *testing.T) {
 	logger := testutil.NewTestLoggerStdout(t)
 	projectName := fmt.Sprintf("ntm_e2e_test_node_%d", time.Now().UnixNano())
 
-	home, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatalf("failed to get home dir: %v", err)
-	}
-	projectDir := filepath.Join(home, "projects", projectName)
-
-	t.Cleanup(func() {
-		logger.Log("CLEANUP: Removing %s", projectDir)
-		os.RemoveAll(projectDir)
-	})
+	projectsBase := t.TempDir()
+	configPath := writeProjectsBaseConfig(t, projectsBase)
+	projectDir := filepath.Join(projectsBase, projectName)
 
 	logger.LogSection("Creating Node.js project with ntm quick")
-	out := testutil.AssertCommandSuccess(t, logger, "ntm", "quick", projectName, "--template=node")
+	out := testutil.AssertCommandSuccess(t, logger, "ntm", "--config", configPath, "quick", projectName, "--template=node")
 	logger.Log("OUTPUT:\n%s", string(out))
 
 	logger.LogSection("Verifying project structure")
@@ -168,19 +154,12 @@ func TestQuickSetupRust(t *testing.T) {
 	logger := testutil.NewTestLoggerStdout(t)
 	projectName := fmt.Sprintf("ntm_e2e_test_rust_%d", time.Now().UnixNano())
 
-	home, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatalf("failed to get home dir: %v", err)
-	}
-	projectDir := filepath.Join(home, "projects", projectName)
-
-	t.Cleanup(func() {
-		logger.Log("CLEANUP: Removing %s", projectDir)
-		os.RemoveAll(projectDir)
-	})
+	projectsBase := t.TempDir()
+	configPath := writeProjectsBaseConfig(t, projectsBase)
+	projectDir := filepath.Join(projectsBase, projectName)
 
 	logger.LogSection("Creating Rust project with ntm quick")
-	out := testutil.AssertCommandSuccess(t, logger, "ntm", "quick", projectName, "--template=rust")
+	out := testutil.AssertCommandSuccess(t, logger, "ntm", "--config", configPath, "quick", projectName, "--template=rust")
 	logger.Log("OUTPUT:\n%s", string(out))
 
 	logger.LogSection("Verifying project structure")
@@ -213,19 +192,12 @@ func TestQuickSetupNoTemplate(t *testing.T) {
 	logger := testutil.NewTestLoggerStdout(t)
 	projectName := fmt.Sprintf("ntm_e2e_test_basic_%d", time.Now().UnixNano())
 
-	home, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatalf("failed to get home dir: %v", err)
-	}
-	projectDir := filepath.Join(home, "projects", projectName)
-
-	t.Cleanup(func() {
-		logger.Log("CLEANUP: Removing %s", projectDir)
-		os.RemoveAll(projectDir)
-	})
+	projectsBase := t.TempDir()
+	configPath := writeProjectsBaseConfig(t, projectsBase)
+	projectDir := filepath.Join(projectsBase, projectName)
 
 	logger.LogSection("Creating basic project with ntm quick (no template)")
-	out := testutil.AssertCommandSuccess(t, logger, "ntm", "quick", projectName)
+	out := testutil.AssertCommandSuccess(t, logger, "ntm", "--config", configPath, "quick", projectName)
 	logger.Log("OUTPUT:\n%s", string(out))
 
 	logger.LogSection("Verifying project structure")
@@ -248,19 +220,12 @@ func TestQuickSetupNoGit(t *testing.T) {
 	logger := testutil.NewTestLoggerStdout(t)
 	projectName := fmt.Sprintf("ntm_e2e_test_nogit_%d", time.Now().UnixNano())
 
-	home, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatalf("failed to get home dir: %v", err)
-	}
-	projectDir := filepath.Join(home, "projects", projectName)
-
-	t.Cleanup(func() {
-		logger.Log("CLEANUP: Removing %s", projectDir)
-		os.RemoveAll(projectDir)
-	})
+	projectsBase := t.TempDir()
+	configPath := writeProjectsBaseConfig(t, projectsBase)
+	projectDir := filepath.Join(projectsBase, projectName)
 
 	logger.LogSection("Creating project with --no-git flag")
-	out := testutil.AssertCommandSuccess(t, logger, "ntm", "quick", projectName, "--no-git")
+	out := testutil.AssertCommandSuccess(t, logger, "ntm", "--config", configPath, "quick", projectName, "--no-git")
 	logger.Log("OUTPUT:\n%s", string(out))
 
 	logger.LogSection("Verifying project structure")
@@ -282,24 +247,17 @@ func TestQuickSetupExistingDirectory(t *testing.T) {
 	logger := testutil.NewTestLoggerStdout(t)
 	projectName := fmt.Sprintf("ntm_e2e_test_exists_%d", time.Now().UnixNano())
 
-	home, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatalf("failed to get home dir: %v", err)
-	}
-	projectDir := filepath.Join(home, "projects", projectName)
+	projectsBase := t.TempDir()
+	configPath := writeProjectsBaseConfig(t, projectsBase)
+	projectDir := filepath.Join(projectsBase, projectName)
 
 	// Create the directory first
 	if err := os.MkdirAll(projectDir, 0755); err != nil {
 		t.Fatalf("failed to create test directory: %v", err)
 	}
 
-	t.Cleanup(func() {
-		logger.Log("CLEANUP: Removing %s", projectDir)
-		os.RemoveAll(projectDir)
-	})
-
 	logger.LogSection("Testing ntm quick on existing directory")
-	_ = testutil.AssertCommandFails(t, logger, "ntm", "quick", projectName)
+	_ = testutil.AssertCommandFails(t, logger, "ntm", "--config", configPath, "quick", projectName)
 
 	logger.Log("PASS: ntm quick correctly failed on existing directory")
 }
@@ -309,6 +267,8 @@ func TestQuickSetupInvalidName(t *testing.T) {
 	testutil.RequireNTMBinary(t)
 
 	logger := testutil.NewTestLoggerStdout(t)
+	projectsBase := t.TempDir()
+	configPath := writeProjectsBaseConfig(t, projectsBase)
 
 	invalidNames := []string{
 		"test/project",
@@ -319,7 +279,7 @@ func TestQuickSetupInvalidName(t *testing.T) {
 
 	for _, name := range invalidNames {
 		logger.LogSection(fmt.Sprintf("Testing invalid name: %s", name))
-		_ = testutil.AssertCommandFails(t, logger, "ntm", "quick", name)
+		_ = testutil.AssertCommandFails(t, logger, "ntm", "--config", configPath, "quick", name)
 		logger.Log("PASS: ntm quick correctly rejected invalid name: %s", name)
 	}
 }

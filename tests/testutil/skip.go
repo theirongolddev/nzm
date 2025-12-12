@@ -3,7 +3,9 @@ package testutil
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -15,12 +17,28 @@ func RequireTmux(t *testing.T) {
 	}
 }
 
-// RequireNTMBinary skips the test if the ntm binary is not in PATH.
+// RequireNTMBinary ensures tests run against a repo-built ntm binary.
+//
+// Many integration/E2E tests invoke "ntm" via PATH; relying on a globally installed
+// binary is fragile (it may not match the workspace source). This helper builds the
+// local binary once per test process and prepends it to PATH so LookPath/exec resolve
+// the correct version.
 func RequireNTMBinary(t *testing.T) {
 	t.Helper()
-	if _, err := exec.LookPath("ntm"); err != nil {
-		t.Skip("ntm binary not in PATH, skipping test")
+
+	binary := BuildLocalNTM(t)
+	binDir := filepath.Dir(binary)
+
+	existing := os.Getenv("PATH")
+	sep := string(os.PathListSeparator)
+	if existing == "" {
+		t.Setenv("PATH", binDir)
+		return
 	}
+	if existing == binDir || strings.HasPrefix(existing, binDir+sep) {
+		return
+	}
+	t.Setenv("PATH", binDir+sep+existing)
 }
 
 // RequireTmuxServer skips the test if no tmux server is running.

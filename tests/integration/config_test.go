@@ -4,9 +4,12 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/Dicklesworthstone/ntm/internal/tmux"
 	"github.com/Dicklesworthstone/ntm/tests/testutil"
 )
 
@@ -72,8 +75,8 @@ func TestConfigCustomAgentCommands(t *testing.T) {
 	binary := testutil.BuildLocalNTM(t)
 	logger := testutil.NewTestLogger(t, t.TempDir())
 
-	// Create temp directory for project
-	projectDir := t.TempDir()
+	// Create temp directory for projects base (spawn creates a project dir under this).
+	projectsBase := t.TempDir()
 
 	// Create a custom command that just echoes a marker
 	customMarker := "CUSTOM_AGENT_CMD_MARKER_" + t.Name()
@@ -82,7 +85,9 @@ func TestConfigCustomAgentCommands(t *testing.T) {
 	configDir := t.TempDir()
 	configPath := filepath.Join(configDir, "config.toml")
 	// Use echo command instead of actual agent - this is just a test
-	configContent := `[agents]
+	configContent := `projects_base = "` + projectsBase + `"
+
+[agents]
 claude = "echo '` + customMarker + `' && sleep 30"
 `
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
@@ -91,8 +96,10 @@ claude = "echo '` + customMarker + `' && sleep 30"
 
 	logger.Log("Created config with custom Claude command at %s", configPath)
 
+	sessionName := "test_custom_agent_" + strconv.FormatInt(time.Now().UnixNano(), 10)
+
 	// Spawn session with custom config
-	out, err := logger.Exec(binary, "--config", configPath, "spawn", "test_custom_agent", "--dir", projectDir, "--cc=1", "--json")
+	out, err := logger.Exec(binary, "--config", configPath, "spawn", sessionName, "--cc=1", "--json")
 	if err != nil {
 		// Session might fail because the command isn't a real agent, but we can still check pane output
 		logger.Log("Spawn completed (may have warnings): %s", string(out))
@@ -115,16 +122,29 @@ claude = "echo '` + customMarker + `' && sleep 30"
 	// Give the command time to run
 	logger.Log("Waiting for custom command to execute...")
 
-	// Capture pane output to verify custom command ran
-	paneContent, err := testutil.CapturePane(result.Session, 0)
+	// Find the spawned cc pane by title and verify our custom marker appears in its output.
+	panes, err := tmux.GetPanesWithActivity(result.Session)
 	if err != nil {
-		t.Fatalf("failed to capture pane: %v", err)
+		t.Fatalf("failed to list panes: %v", err)
+	}
+	var ccPaneID string
+	for _, p := range panes {
+		if strings.HasPrefix(p.Pane.Title, result.Session+"__cc_") {
+			ccPaneID = p.Pane.ID
+			break
+		}
+	}
+	if ccPaneID == "" {
+		t.Fatalf("cc pane not found in session %s", result.Session)
 	}
 
-	// Verify our custom marker appears in the output
-	if !strings.Contains(paneContent, customMarker) {
-		t.Fatalf("expected custom agent command marker in pane output:\n%s", paneContent)
-	}
+	testutil.AssertEventually(t, logger, 5*time.Second, 150*time.Millisecond, "cc pane outputs custom marker", func() bool {
+		captured, err := tmux.CapturePaneOutput(ccPaneID, 200)
+		if err != nil {
+			return false
+		}
+		return strings.Contains(captured, customMarker)
+	})
 
 	logger.Log("PASS: Custom agent command was used")
 }
@@ -134,19 +154,24 @@ func TestConfigPaletteFromConfig(t *testing.T) {
 	binary := testutil.BuildLocalNTM(t)
 	logger := testutil.NewTestLogger(t, t.TempDir())
 
+	// Prevent user/global palette markdown from overriding TOML [[palette]] in this test.
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
 	// Create temp config file with palette commands
 	configDir := t.TempDir()
 	configPath := filepath.Join(configDir, "config.toml")
 	configContent := `
 [[palette]]
-name = "Test Command One"
-content = "This is test command one"
+key = "test_cmd_one"
+label = "Test Command One"
+prompt = "This is test command one"
 category = "test"
 tags = ["integration", "test"]
 
 [[palette]]
-name = "Test Command Two"
-content = "This is test command two"
+key = "test_cmd_two"
+label = "Test Command Two"
+prompt = "This is test command two"
 category = "test"
 `
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
@@ -164,8 +189,9 @@ category = "test"
 	// Parse output to verify palette commands
 	var configResult struct {
 		Palette []struct {
-			Name     string   `json:"name"`
-			Content  string   `json:"content"`
+			Key      string   `json:"key"`
+			Label    string   `json:"label"`
+			Prompt   string   `json:"prompt"`
 			Category string   `json:"category"`
 			Tags     []string `json:"tags"`
 		} `json:"palette"`
@@ -178,16 +204,16 @@ category = "test"
 	foundOne := false
 	foundTwo := false
 	for _, cmd := range configResult.Palette {
-		if cmd.Name == "Test Command One" {
+		if cmd.Label == "Test Command One" {
 			foundOne = true
-			if cmd.Content != "This is test command one" {
-				t.Fatalf("Test Command One has wrong content: %s", cmd.Content)
+			if cmd.Prompt != "This is test command one" {
+				t.Fatalf("Test Command One has wrong prompt: %s", cmd.Prompt)
 			}
 			if cmd.Category != "test" {
 				t.Fatalf("Test Command One has wrong category: %s", cmd.Category)
 			}
 		}
-		if cmd.Name == "Test Command Two" {
+		if cmd.Label == "Test Command Two" {
 			foundTwo = true
 		}
 	}
