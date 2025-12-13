@@ -164,11 +164,13 @@ The palette features:
 - **Animated gradient banner** with shimmering title effects
 - **Catppuccin color theme** with elegant gradients throughout
 - **Fuzzy search** through all commands with live filtering
-- **Live preview pane** showing full prompt text with syntax highlighting
+- **Pinned + recent commands** so you re-search less (pin/favorite with `Ctrl+P` / `Ctrl+F`)
+- **Live preview pane** showing full prompt text + target metadata to reduce misfires
 - **Nerd Font icons** (with Unicode/ASCII fallbacks for basic terminals)
 - **Visual target selector** with animated color-coded agent badges
 - **Quick select**: Numbers 1-9 for instant command selection
 - **Smooth animations**: Pulsing indicators, gradient transitions
+- **Help overlay**: Press `?` (or `F1`) for key hints
 - **Keyboard-driven**: Full keyboard navigation with vim-style keys
 
 ### Interactive Dashboard
@@ -185,6 +187,8 @@ The dashboard provides:
 - **Animated status indicators** with pulsing selection highlights
 - **Quick navigation**: Use 1-9 to select panes, z/Enter to zoom
 - **Real-time refresh**: Press r to update pane status
+- **Context + mail shortcuts**: Press `c` for context, `m` for Agent Mail
+- **Help overlay**: Press `?` for key hints (Esc closes)
 - **Responsive layout**: Adapts to terminal size automatically
 
 ### Tmux Keybinding Setup
@@ -914,9 +918,25 @@ export NTM_ICONS=unicode # Force Unicode
 export NTM_ICONS=ascii   # Force ASCII
 ```
 
+### Accessibility & Terminal Compatibility
+
+Reduce motion (disable shimmer/pulse animations):
+
+```bash
+export NTM_REDUCE_MOTION=1
+```
+
+Disable colors (respects the `NO_COLOR` standard, with an NTM override):
+
+```bash
+export NO_COLOR=1        # Any value disables colors
+export NTM_NO_COLOR=1    # NTM-specific no-color toggle
+export NTM_NO_COLOR=0    # Force colors ON (even if NO_COLOR is set)
+```
+
 ### Wide/High-Resolution Displays
-- Width tiers: stacked layouts below 120 cols; split list/detail at 120+; richer metadata at 200+; tertiary labels/variants/locks at 240+.
-- Give dashboard/status/palette at least 120 cols for split view; 200+ unlocks wider gutters and secondary columns; 240+ enables the full detail bars.
+- Width tiers: stacked layouts below 120 cols; split list/detail at 120+; richer metadata at 200+; tertiary labels/variants/locks at 240+; mega layouts at 320+.
+- Give dashboard/status/palette at least 120 cols for split view; 200+ unlocks wider gutters and secondary columns; 240+ enables the full detail bars; 320+ enables mega layouts.
 - Icons are ASCII-first by default. Switch to `NTM_ICONS=unicode` or `NTM_ICONS=nerd` only if your terminal font renders them cleanly; otherwise stay on ASCII to avoid misaligned gutters.
 - Troubleshooting: if text wraps or glyphs drift, widen the pane, drop to `NTM_ICONS=ascii`, and ensure a true monospace font (Nerd Fonts installed before using `NTM_ICONS=nerd`).
 
@@ -925,11 +945,71 @@ export NTM_ICONS=ascii   # Force ASCII
 | Narrow | <120 cols | Stacked layout, minimal badges |
 | Split | 120-199 cols | List/detail split view |
 | Wide | 200-239 cols | Secondary metadata, wider gutters |
-| Ultra | ≥240 cols | Tertiary labels/variants/locks, max detail |
+| Ultra | 240-319 cols | Tertiary labels/variants/locks, max detail |
+| Mega | ≥320 cols | Mega layouts, richest metadata |
 
 ---
 
 ## Typical Workflow
+
+### Workflow Cookbook
+
+#### First run (10 minutes)
+
+```bash
+# 1) Install + shell integration (zsh example)
+curl -fsSL https://raw.githubusercontent.com/Dicklesworthstone/ntm/main/install.sh | bash
+echo 'eval "$(ntm init zsh)"' >> ~/.zshrc && source ~/.zshrc
+
+# 2) Sanity check + quick orientation
+ntm deps -v
+ntm tutorial
+
+# 3) Spawn a session and bind the palette popup key (F6 by default)
+ntm spawn myapi --cc=2 --cod=1
+ntm bind
+```
+
+#### Daily loop (attach → palette → send → dashboard → copy/save → detach)
+
+```bash
+ntm attach myapi
+
+# Inside the dashboard/palette: press ? for key hints
+ntm dashboard myapi
+ntm palette myapi
+
+# Useful capture loop
+ntm copy myapi --cc --last 200
+ntm save myapi -o ~/logs/myapi
+
+# Detach from tmux (agents keep running): Ctrl+B, then D
+```
+
+#### SSH flow (remote-first)
+
+```bash
+ssh user@host
+
+# Sessions persist on the server
+ntm list
+ntm attach myapi
+
+# Inside tmux, these auto-select the current session:
+ntm dashboard
+ntm palette
+
+# If clipboard isn't available on the remote, save to a file instead:
+ntm copy myapi --cc --output out.txt
+```
+
+#### Troubleshooting patterns (fast fixes)
+
+- No sessions exist: `ntm spawn <name>`
+- Icons drift/misaligned gutters: `export NTM_ICONS=ascii`
+- Too much motion/flicker: `export NTM_REDUCE_MOTION=1`
+- Need plain output / low-color terminal: `export NO_COLOR=1` (or `export NTM_NO_COLOR=1`)
+- Copy complains about non-interactive mode: pass a session explicitly (e.g. `ntm copy myapi --cc`)
 
 ### Starting a New Project
 
@@ -974,6 +1054,8 @@ ntm palette myapi
 # Use fuzzy search to find commands
 # Type "fix" to filter to "Fix the Bug"
 # Press 1-9 for quick select
+# Press ? for key hints/help overlay
+# Ctrl+P to pin/unpin a command; Ctrl+F to favorite/unfavorite
 # Select target: 1=All, 2=Claude, 3=Codex, 4=Gemini
 ```
 

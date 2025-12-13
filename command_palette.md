@@ -1,14 +1,26 @@
-# NTM Command Palette
+# NTM Command Palette (`command_palette.md`)
+#
+# This file defines the prompts shown in `ntm palette`.
+#
+# Usage:
+#   - `ntm palette [session]` (or press the tmux popup key after `ntm bind`, default: F6)
+#   - In the palette: type to filter, `1-9` quick-select, `Enter` select, `?` for help
+#   - Target selection: press `1-4` to choose recipients (All / Claude / Codex / Gemini)
+#
+# Preview pane:
+#   - Shows targets + prompt metadata (lines/chars) and lightweight warning badges.
 #
 # Format:
 #   ## Category Name
 #   ### command_key | Display Label
 #   The prompt text (can be multiple lines)
 #
-# Usage: ntm-palette <session> or press F6 in tmux
+# Prompt design tips:
+#   - Prefer short, explicit, reversible steps; avoid “do everything”.
+#   - If something is destructive (rm/git reset), make it opt-in and ask for confirmation.
+#   - Include one concrete “next command” when possible.
 #
-# This is the default command palette bundled with NTM.
-# Edit this file to customize, or fork the repo to create your own defaults.
+# NOTE: Recents/favorites/pinning are planned but may not be available in all builds yet.
 
 ## Analysis & Review
 
@@ -82,7 +94,7 @@ Pick the next bead you can actually do usefully now and start coding on it immed
 OK, so start systematically and methodically and meticulously and diligently executing those remaining beads tasks that you created in the optimal logical order! Don't forget to mark beads as you work on them. 
 
 ### do_all_of_it | Do All Of It
-OK, please do ALL of that now. Keep a super detailed, granular, and complete TODO list of all items so you don't lose track of anything and remember to complete all the tasks and sub-tasks you identified or which you think of during the course of your work on these items! 
+OK, please do ALL of that now. Track work via bd beads (no markdown TODO lists): create/claim/update/close beads as you go so nothing gets lost, and keep communicating via Agent Mail when you start/finish work. 
 
 ## Git & Operations
 
