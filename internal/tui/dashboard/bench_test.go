@@ -109,7 +109,7 @@ func BenchmarkPaneGrid_Compact_1000(b *testing.B) {
 
 // newBenchModel builds a dashboard model with synthetic panes for benchmarks.
 func newBenchModel(width, height, panes int) Model {
-	m := New("bench")
+	m := New("bench", "")
 	m.width = width
 	m.height = height
 	m.tier = layout.TierForWidth(width)

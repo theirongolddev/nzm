@@ -255,8 +255,8 @@ func TestHistoryPanelViewNoHistory(t *testing.T) {
 
 	view := panel.View()
 
-	if !strings.Contains(view, "No history") {
-		t.Error("expected view to contain 'No history' when empty")
+	if !strings.Contains(view, "No command history") {
+		t.Error("expected view to contain 'No command history' when empty")
 	}
 }
 

@@ -16,7 +16,7 @@ import (
 )
 
 func newTestModel(width int) Model {
-	m := New("test")
+	m := New("test", "")
 	m.width = width
 	m.height = 30
 	m.tier = layout.TierForWidth(width)

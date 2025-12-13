@@ -175,7 +175,7 @@ func TestTickerPanelBuildFleetSegment(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			panel.SetData(tc.data)
-			segment := panel.buildFleetSegment(panel.theme)
+			segment := panel.buildPlainFleetSegment()
 
 			for _, expected := range tc.contains {
 				if !strings.Contains(segment, expected) {
@@ -226,7 +226,7 @@ func TestTickerPanelBuildAlertsSegment(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			panel.SetData(tc.data)
-			segment := panel.buildAlertsSegment(panel.theme)
+			segment := panel.buildPlainAlertsSegment()
 
 			for _, expected := range tc.contains {
 				if !strings.Contains(segment, expected) {
@@ -268,7 +268,7 @@ func TestTickerPanelBuildBeadsSegment(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			panel.SetData(tc.data)
-			segment := panel.buildBeadsSegment(panel.theme)
+			segment := panel.buildPlainBeadsSegment()
 
 			for _, expected := range tc.contains {
 				if !strings.Contains(segment, expected) {
@@ -317,7 +317,7 @@ func TestTickerPanelBuildMailSegment(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			panel.SetData(tc.data)
-			segment := panel.buildMailSegment(panel.theme)
+			segment := panel.buildPlainMailSegment()
 
 			for _, expected := range tc.contains {
 				if !strings.Contains(segment, expected) {
@@ -341,7 +341,7 @@ func TestTickerPanelScrollText(t *testing.T) {
 
 	// Text shorter than width should be centered
 	shortText := "Hello"
-	result := panel.scrollText(shortText)
+	result := panel.scrollPlainText(shortText)
 	if len(result) != 20 {
 		t.Errorf("expected result length 20, got %d", len(result))
 	}
@@ -352,10 +352,10 @@ func TestTickerPanelScrollText(t *testing.T) {
 	// Text longer than width should scroll
 	longText := "This is a very long text that should scroll horizontally"
 	panel.SetAnimTick(0)
-	result1 := panel.scrollText(longText)
+	result1 := panel.scrollPlainText(longText)
 
 	panel.SetAnimTick(10)
-	result2 := panel.scrollText(longText)
+	result2 := panel.scrollPlainText(longText)
 
 	// Different offsets should produce different visible portions
 	if result1 == result2 {

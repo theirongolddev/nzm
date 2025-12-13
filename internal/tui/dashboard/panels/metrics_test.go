@@ -189,6 +189,14 @@ func TestMetricsPanelViewSessionTotal(t *testing.T) {
 	panel := NewMetricsPanel()
 	panel.SetSize(80, 20)
 
+	// Provide some data so it renders the stats
+	data := MetricsData{
+		TotalTokens: 100,
+		TotalCost:   0.01,
+		Agents:      []AgentMetric{{Name: "agent", Tokens: 100}},
+	}
+	panel.SetData(data, nil)
+
 	view := panel.View()
 
 	if !strings.Contains(view, "Session Total") {

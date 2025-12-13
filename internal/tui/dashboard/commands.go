@@ -23,7 +23,7 @@ func (m Model) fetchBeadsCmd() tea.Cmd {
 		if !bv.IsInstalled() {
 			return BeadsUpdateMsg{Err: fmt.Errorf("bv not installed")}
 		}
-		summary := bv.GetBeadsSummary(5) // Get top 5 ready/in-progress
+		summary := bv.GetBeadsSummary(m.projectDir, 5) // Get top 5 ready/in-progress
 		if !summary.Available {
 			return BeadsUpdateMsg{Err: fmt.Errorf("%s", summary.Reason)}
 		}

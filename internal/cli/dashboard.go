@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Dicklesworthstone/ntm/internal/config"
 	"github.com/Dicklesworthstone/ntm/internal/palette"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
 	"github.com/Dicklesworthstone/ntm/internal/tui/dashboard"
@@ -74,5 +75,13 @@ func runDashboard(session string) error {
 		return fmt.Errorf("session '%s' not found", session)
 	}
 
-	return dashboard.Run(session)
+	projectDir := ""
+	if cfg != nil {
+		projectDir = cfg.GetProjectDir(session)
+	} else {
+		// Fallback to default if config not loaded
+		projectDir = config.Default().GetProjectDir(session)
+	}
+
+	return dashboard.Run(session, projectDir)
 }

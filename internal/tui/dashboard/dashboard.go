@@ -3,6 +3,7 @@ package dashboard
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -19,7 +20,7 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/alerts"
 	"github.com/Dicklesworthstone/ntm/internal/bv"
 	"github.com/Dicklesworthstone/ntm/internal/cass"
-	config "github.com/Dicklesworthstone/ntm/internal/config"
+	"github.com/Dicklesworthstone/ntm/internal/config"
 	"github.com/Dicklesworthstone/ntm/internal/history"
 	"github.com/Dicklesworthstone/ntm/internal/scanner"
 	"github.com/Dicklesworthstone/ntm/internal/status"
@@ -44,6 +45,8 @@ type RefreshMsg struct{}
 type StatusUpdateMsg struct {
 	Statuses []status.AgentStatus
 	Time     time.Time
+	Duration time.Duration
+	Err      error
 }
 
 // ConfigReloadMsg is sent when configuration changes
@@ -62,6 +65,7 @@ type ScanStatusMsg struct {
 	Status   string
 	Totals   scanner.ScanTotals
 	Duration time.Duration
+	Err      error
 }
 
 // AgentMailUpdateMsg is sent when Agent Mail data is fetched
@@ -131,6 +135,7 @@ const (
 // Model is the session dashboard model
 type Model struct {
 	session      string
+	projectDir   string
 	panes        []tmux.Pane
 	width        int
 	height       int
@@ -139,6 +144,12 @@ type Model struct {
 	focusedPanel PanelID
 	quitting     bool
 	err          error
+
+	// Diagnostics (opt-in)
+	showDiagnostics     bool
+	sessionFetchLatency time.Duration
+	statusFetchLatency  time.Duration
+	statusFetchErr      error
 
 	// Stats
 	claudeCount int
@@ -169,6 +180,24 @@ type Model struct {
 	lastAlertsFetch      time.Time
 	lastBeadsFetch       time.Time
 	lastCassContextFetch time.Time
+
+	// Fetch state tracking to prevent pile-up
+	fetchingSession     bool
+	fetchingContext     bool
+	fetchingAlerts      bool
+	fetchingBeads       bool
+	fetchingCassContext bool
+	fetchingMetrics     bool
+	fetchingHistory     bool
+	fetchingFileChanges bool
+	fetchingScan        bool
+
+	// Coalescing/cancellation for user-triggered refreshes
+	sessionFetchPending bool
+	sessionFetchCancel  context.CancelFunc
+	contextFetchPending bool
+	scanFetchPending    bool
+	scanFetchCancel     context.CancelFunc
 
 	// Auto-refresh configuration
 	refreshInterval time.Duration
@@ -273,6 +302,7 @@ type KeyMap struct {
 	MailRefresh    key.Binding // 'm' to refresh Agent Mail data
 	CassSearch     key.Binding // 'ctrl+s' to open CASS search
 	Help           key.Binding // '?' to toggle help overlay
+	Diagnostics    key.Binding // 'd' to toggle diagnostics
 	Tab            key.Binding
 	ShiftTab       key.Binding
 	Num1           key.Binding
@@ -292,7 +322,7 @@ const DefaultRefreshInterval = 2 * time.Second
 // Per-subsystem refresh cadence (driven by DashboardTickMsg)
 const (
 	PaneRefreshInterval        = 1 * time.Second
-	ContextRefreshInterval     = 2 * time.Second
+	ContextRefreshInterval     = 10 * time.Second
 	AlertsRefreshInterval      = 3 * time.Second
 	BeadsRefreshInterval       = 5 * time.Second
 	CassContextRefreshInterval = 15 * time.Minute
@@ -322,6 +352,7 @@ var dashKeys = KeyMap{
 	MailRefresh:    key.NewBinding(key.WithKeys("m"), key.WithHelp("m", "refresh mail")),
 	CassSearch:     key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", "cass search")),
 	Help:           key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "toggle help")),
+	Diagnostics:    key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "toggle diagnostics")),
 	Tab:            key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next panel")),
 	ShiftTab:       key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "prev panel")),
 	Num1:           key.NewBinding(key.WithKeys("1")),
@@ -336,12 +367,13 @@ var dashKeys = KeyMap{
 }
 
 // New creates a new dashboard model
-func New(session string) Model {
+func New(session, projectDir string) Model {
 	t := theme.Current()
 	ic := icons.Current()
 
 	m := Model{
 		session:         session,
+		projectDir:      projectDir,
 		width:           80,
 		height:          24,
 		tier:            layout.TierForWidth(80),
@@ -366,6 +398,17 @@ func New(session string) Model {
 		cassPanel:    panels.NewCASSPanel(),
 		filesPanel:   panels.NewFilesPanel(),
 		tickerPanel:  panels.NewTickerPanel(),
+
+		// Init() kicks off these fetches immediately; mark as fetching so the tick loop
+		// doesn’t pile on duplicates if the first round is still in flight.
+		fetchingSession:     true,
+		fetchingContext:     true,
+		fetchingAlerts:      true,
+		fetchingBeads:       true,
+		fetchingCassContext: true,
+		fetchingMetrics:     true,
+		fetchingHistory:     true,
+		fetchingFileChanges: true,
 	}
 
 	// Initialize last-fetch timestamps to start cadence after the initial fetches from Init.
@@ -405,8 +448,8 @@ func New(session string) Model {
 }
 
 // NewWithInterval creates a dashboard with custom refresh interval
-func NewWithInterval(session string, interval time.Duration) Model {
-	m := New(session)
+func NewWithInterval(session, projectDir string, interval time.Duration) Model {
+	m := New(session, projectDir)
 	m.refreshInterval = interval
 	return m
 }
@@ -455,7 +498,7 @@ func (m Model) fetchHealthStatus() tea.Cmd {
 			}
 		}
 
-		result := bv.CheckDrift()
+		result := bv.CheckDrift(m.projectDir)
 		var status string
 		switch result.Status {
 		case bv.DriftOK:
@@ -479,12 +522,20 @@ func (m Model) fetchHealthStatus() tea.Cmd {
 
 // fetchScanStatus performs a quick UBS scan for badge display (diff-only)
 func (m Model) fetchScanStatus() tea.Cmd {
+	return m.fetchScanStatusWithContext(context.Background())
+}
+
+func (m Model) fetchScanStatusWithContext(ctx context.Context) tea.Cmd {
 	return func() tea.Msg {
 		if !scanner.IsAvailable() {
 			return ScanStatusMsg{Status: "unavailable"}
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		if ctx == nil {
+			ctx = context.Background()
+		}
+
+		ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 		defer cancel()
 
 		opts := scanner.ScanOptions{
@@ -495,7 +546,16 @@ func (m Model) fetchScanStatus() tea.Cmd {
 		start := time.Now()
 		result, err := scanner.QuickScanWithOptions(ctx, ".", opts)
 		if err != nil {
-			return ScanStatusMsg{Status: "error"}
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				if errors.Is(ctxErr, context.Canceled) {
+					return ScanStatusMsg{Err: ctxErr}
+				}
+				return ScanStatusMsg{Status: "error", Err: ctxErr}
+			}
+			if errors.Is(err, context.Canceled) {
+				return ScanStatusMsg{Err: err}
+			}
+			return ScanStatusMsg{Status: "error", Err: err}
 		}
 		if result == nil {
 			return ScanStatusMsg{Status: "unavailable"}
@@ -596,24 +656,139 @@ type PaneOutputData struct {
 }
 
 type SessionDataWithOutputMsg struct {
-	Panes   []tmux.Pane
-	Outputs []PaneOutputData
-	Err     error
+	Panes    []tmux.Pane
+	Outputs  []PaneOutputData
+	Duration time.Duration
+	Err      error
 }
 
 func (m Model) fetchSessionDataWithOutputs() tea.Cmd {
+	return m.fetchSessionDataWithOutputsCtx(context.Background())
+}
+
+func (m *Model) requestSessionFetch(cancelInFlight bool) tea.Cmd {
+	m.sessionFetchPending = true
+
+	if m.fetchingSession {
+		if cancelInFlight && m.sessionFetchCancel != nil {
+			m.sessionFetchCancel()
+		}
+		return nil
+	}
+
+	return m.startSessionFetch()
+}
+
+func (m *Model) startSessionFetch() tea.Cmd {
+	if m.fetchingSession || !m.sessionFetchPending {
+		return nil
+	}
+
+	m.sessionFetchPending = false
+	m.fetchingSession = true
+	m.lastPaneFetch = time.Now()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	m.sessionFetchCancel = cancel
+
+	return m.fetchSessionDataWithOutputsCtx(ctx)
+}
+
+func (m *Model) finishSessionFetch() tea.Cmd {
+	m.fetchingSession = false
+	if m.sessionFetchCancel != nil {
+		m.sessionFetchCancel()
+		m.sessionFetchCancel = nil
+	}
+
+	return m.startSessionFetch()
+}
+
+func (m *Model) requestStatusesFetch() tea.Cmd {
+	m.contextFetchPending = true
+
+	if m.fetchingContext {
+		return nil
+	}
+
+	return m.startStatusesFetch()
+}
+
+func (m *Model) startStatusesFetch() tea.Cmd {
+	if m.fetchingContext || !m.contextFetchPending {
+		return nil
+	}
+
+	m.contextFetchPending = false
+	m.fetchingContext = true
+	m.lastContextFetch = time.Now()
+
+	return m.fetchStatuses()
+}
+
+func (m *Model) finishStatusesFetch() tea.Cmd {
+	m.fetchingContext = false
+	return m.startStatusesFetch()
+}
+
+func (m *Model) requestScanFetch(cancelInFlight bool) tea.Cmd {
+	m.scanFetchPending = true
+
+	if m.fetchingScan {
+		if cancelInFlight && m.scanFetchCancel != nil {
+			m.scanFetchCancel()
+		}
+		return nil
+	}
+
+	return m.startScanFetch()
+}
+
+func (m *Model) startScanFetch() tea.Cmd {
+	if m.fetchingScan || !m.scanFetchPending {
+		return nil
+	}
+
+	m.scanFetchPending = false
+	m.fetchingScan = true
+
+	ctx, cancel := context.WithCancel(context.Background())
+	m.scanFetchCancel = cancel
+
+	return m.fetchScanStatusWithContext(ctx)
+}
+
+func (m *Model) finishScanFetch() tea.Cmd {
+	m.fetchingScan = false
+	if m.scanFetchCancel != nil {
+		m.scanFetchCancel()
+		m.scanFetchCancel = nil
+	}
+
+	return m.startScanFetch()
+}
+
+func (m Model) fetchSessionDataWithOutputsCtx(ctx context.Context) tea.Cmd {
 	return func() tea.Msg {
-		panes, err := tmux.GetPanes(m.session)
+		start := time.Now()
+		if ctx == nil {
+			ctx = context.Background()
+		}
+
+		panes, err := tmux.GetPanesContext(ctx, m.session)
 		if err != nil {
-			return SessionDataWithOutputMsg{Err: err}
+			return SessionDataWithOutputMsg{Err: err, Duration: time.Since(start)}
 		}
 
 		var outputs []PaneOutputData
 		for _, pane := range panes {
+			if err := ctx.Err(); err != nil {
+				return SessionDataWithOutputMsg{Err: err, Duration: time.Since(start)}
+			}
 			if pane.Type == tmux.AgentUser {
 				continue
 			}
-			out, err := tmux.CapturePaneOutput(pane.ID, 50)
+			out, err := tmux.CapturePaneOutputContext(ctx, pane.ID, 50)
 			if err == nil {
 				outputs = append(outputs, PaneOutputData{
 					PaneIndex: pane.Index,
@@ -623,19 +798,28 @@ func (m Model) fetchSessionDataWithOutputs() tea.Cmd {
 			}
 		}
 
-		return SessionDataWithOutputMsg{Panes: panes, Outputs: outputs}
+		if err := ctx.Err(); err != nil {
+			return SessionDataWithOutputMsg{Err: err, Duration: time.Since(start)}
+		}
+
+		return SessionDataWithOutputMsg{Panes: panes, Outputs: outputs, Duration: time.Since(start)}
 	}
 }
 
 // fetchStatuses runs unified status detection across all panes
 func (m Model) fetchStatuses() tea.Cmd {
 	return func() tea.Msg {
-		statuses, err := m.detector.DetectAll(m.session)
+		start := time.Now()
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+
+		statuses, err := m.detector.DetectAllContext(ctx, m.session)
+		duration := time.Since(start)
 		if err != nil {
 			// Keep UI responsive even if detection fails
-			return StatusUpdateMsg{Statuses: nil, Time: time.Now()}
+			return StatusUpdateMsg{Statuses: nil, Time: time.Now(), Duration: duration, Err: err}
 		}
-		return StatusUpdateMsg{Statuses: statuses, Time: time.Now()}
+		return StatusUpdateMsg{Statuses: statuses, Time: time.Now(), Duration: duration}
 	}
 }
 
@@ -664,6 +848,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 
 	case BeadsUpdateMsg:
+		m.fetchingBeads = false
 		m.beadsError = msg.Err
 		if msg.Err == nil {
 			m.beadsSummary = msg.Summary
@@ -673,6 +858,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case AlertsUpdateMsg:
+		m.fetchingAlerts = false
 		m.alertsError = msg.Err
 		if msg.Err == nil {
 			m.activeAlerts = msg.Alerts
@@ -681,6 +867,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case MetricsUpdateMsg:
+		m.fetchingMetrics = false
+		if msg.Err != nil && errors.Is(msg.Err, context.Canceled) {
+			return m, nil
+		}
 		m.metricsError = msg.Err
 		if msg.Err == nil {
 			m.metricsTokens = msg.Data.TotalTokens
@@ -691,6 +881,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case HistoryUpdateMsg:
+		m.fetchingHistory = false
+		if msg.Err != nil && errors.Is(msg.Err, context.Canceled) {
+			return m, nil
+		}
 		m.historyError = msg.Err
 		if msg.Err == nil {
 			m.cmdHistory = msg.Entries
@@ -699,6 +893,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case FileChangeMsg:
+		m.fetchingFileChanges = false
+		if msg.Err != nil && errors.Is(msg.Err, context.Canceled) {
+			return m, nil
+		}
 		m.fileChangesError = msg.Err
 		if msg.Err == nil {
 			m.fileChanges = msg.Changes
@@ -709,6 +907,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case CASSContextMsg:
+		m.fetchingCassContext = false
 		m.cassError = msg.Err
 		m.cassContext = msg.Hits
 		if m.cassPanel != nil {
@@ -743,28 +942,46 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Drive staggered refreshes on the animation ticker to avoid a single heavy burst.
 		now := time.Now()
 		if !m.refreshPaused {
-			if now.Sub(m.lastPaneFetch) >= PaneRefreshInterval {
-				cmds = append(cmds, m.fetchSessionDataWithOutputs(), m.fetchScanStatus())
-				m.lastPaneFetch = now
+			if now.Sub(m.lastPaneFetch) >= PaneRefreshInterval && !m.fetchingSession {
+				if cmd := m.requestSessionFetch(false); cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+				if !m.fetchingScan {
+					if cmd := m.requestScanFetch(false); cmd != nil {
+						cmds = append(cmds, cmd)
+					}
+				}
 			}
-			if now.Sub(m.lastContextFetch) >= ContextRefreshInterval {
-				cmds = append(cmds,
-					m.fetchStatuses(),
-					m.fetchMetricsCmd(),
-					m.fetchHistoryCmd(),
-					m.fetchFileChangesCmd(),
-				)
-				m.lastContextFetch = now
+			if now.Sub(m.lastContextFetch) >= ContextRefreshInterval && !m.fetchingContext {
+				if cmd := m.requestStatusesFetch(); cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+
+				if !m.fetchingMetrics {
+					m.fetchingMetrics = true
+					cmds = append(cmds, m.fetchMetricsCmd())
+				}
+				if !m.fetchingHistory {
+					m.fetchingHistory = true
+					cmds = append(cmds, m.fetchHistoryCmd())
+				}
+				if !m.fetchingFileChanges {
+					m.fetchingFileChanges = true
+					cmds = append(cmds, m.fetchFileChangesCmd())
+				}
 			}
-			if now.Sub(m.lastAlertsFetch) >= AlertsRefreshInterval {
+			if now.Sub(m.lastAlertsFetch) >= AlertsRefreshInterval && !m.fetchingAlerts {
+				m.fetchingAlerts = true
 				cmds = append(cmds, m.fetchAlertsCmd())
 				m.lastAlertsFetch = now
 			}
-			if now.Sub(m.lastBeadsFetch) >= BeadsRefreshInterval {
+			if now.Sub(m.lastBeadsFetch) >= BeadsRefreshInterval && !m.fetchingBeads {
+				m.fetchingBeads = true
 				cmds = append(cmds, m.fetchBeadsCmd())
 				m.lastBeadsFetch = now
 			}
-			if now.Sub(m.lastCassContextFetch) >= CassContextRefreshInterval {
+			if now.Sub(m.lastCassContextFetch) >= CassContextRefreshInterval && !m.fetchingCassContext {
+				m.fetchingCassContext = true
 				cmds = append(cmds, m.fetchCASSContextCmd())
 				m.lastCassContextFetch = now
 			}
@@ -774,21 +991,56 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 
 	case RefreshMsg:
-		// Trigger async fetch for pane data and status detection
-		return m, tea.Batch(
-			m.fetchSessionDataWithOutputs(),
-			m.fetchStatuses(),
-			m.fetchBeadsCmd(),
-			m.fetchAlertsCmd(),
-			m.fetchMetricsCmd(),
-			m.fetchHistoryCmd(),
-			m.fetchFileChangesCmd(),
-		)
+		// Trigger async fetches across subsystems (coalesced to avoid pile-up).
+		if cmd := m.requestSessionFetch(false); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		if cmd := m.requestStatusesFetch(); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		if !m.fetchingBeads {
+			m.fetchingBeads = true
+			m.lastBeadsFetch = time.Now()
+			cmds = append(cmds, m.fetchBeadsCmd())
+		}
+		if !m.fetchingAlerts {
+			m.fetchingAlerts = true
+			m.lastAlertsFetch = time.Now()
+			cmds = append(cmds, m.fetchAlertsCmd())
+		}
+		if !m.fetchingMetrics {
+			m.fetchingMetrics = true
+			cmds = append(cmds, m.fetchMetricsCmd())
+		}
+		if !m.fetchingHistory {
+			m.fetchingHistory = true
+			cmds = append(cmds, m.fetchHistoryCmd())
+		}
+		if !m.fetchingFileChanges {
+			m.fetchingFileChanges = true
+			cmds = append(cmds, m.fetchFileChangesCmd())
+		}
+		if !m.fetchingCassContext {
+			m.fetchingCassContext = true
+			m.lastCassContextFetch = time.Now()
+			cmds = append(cmds, m.fetchCASSContextCmd())
+		}
+		return m, tea.Batch(cmds...)
 
 	case SessionDataWithOutputMsg:
+		followUp := m.finishSessionFetch()
+		m.sessionFetchLatency = msg.Duration
+
 		if msg.Err != nil {
-			m.err = msg.Err
-		} else {
+			// Ignore coalescing cancellations; we’ll immediately re-fetch if pending.
+			if !errors.Is(msg.Err, context.Canceled) {
+				m.err = msg.Err
+			}
+			return m, followUp
+		}
+		m.err = nil
+
+		{
 			m.panes = msg.Panes
 			m.updateStats()
 
@@ -834,9 +1086,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.paneStatus[data.PaneIndex] = ps
 			}
 		}
-		return m, nil
+		return m, followUp
 
 	case StatusUpdateMsg:
+		followUp := m.finishStatusesFetch()
+		m.statusFetchLatency = msg.Duration
+		m.statusFetchErr = msg.Err
 		// Build index lookup for current panes
 		paneIndexByID := make(map[string]int)
 		for _, p := range m.panes {
@@ -864,7 +1119,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.agentStatuses[st.PaneID] = st
 		}
 		m.lastRefresh = msg.Time
-		return m, nil
+		return m, followUp
 
 	case ConfigReloadMsg:
 		if msg.Config != nil {
@@ -889,10 +1144,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case ScanStatusMsg:
-		m.scanStatus = msg.Status
-		m.scanTotals = msg.Totals
-		m.scanDuration = msg.Duration
-		return m, nil
+		followUp := m.finishScanFetch()
+		if msg.Err != nil && errors.Is(msg.Err, context.Canceled) {
+			return m, followUp
+		}
+
+		// Only update badge state if the scan actually produced a new result.
+		if msg.Status != "" {
+			m.scanStatus = msg.Status
+			m.scanTotals = msg.Totals
+			m.scanDuration = msg.Duration
+		}
+		return m, followUp
 
 	case AgentMailUpdateMsg:
 		m.agentMailAvailable = msg.Available
@@ -936,13 +1199,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, dashKeys.Help):
 			m.showHelp = !m.showHelp
 			return m, nil
-
-		case key.Matches(msg, dashKeys.NextPanel):
-			m.cycleFocus(1)
-			return m, nil
-
-		case key.Matches(msg, dashKeys.PrevPanel):
-			m.cycleFocus(-1)
+		case key.Matches(msg, dashKeys.Diagnostics):
+			m.showDiagnostics = !m.showDiagnostics
 			return m, nil
 
 		case key.Matches(msg, dashKeys.Quit):
@@ -960,20 +1218,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case key.Matches(msg, dashKeys.Refresh):
-			// Manual refresh
-			return m, tea.Batch(
-				m.fetchSessionDataWithOutputs(),
-				m.fetchStatuses(),
-				m.fetchScanStatus(),
-			)
+			// Manual refresh (coalesced; cancels in-flight where supported)
+			var refreshCmds []tea.Cmd
+			if cmd := m.requestSessionFetch(true); cmd != nil {
+				refreshCmds = append(refreshCmds, cmd)
+			}
+			if cmd := m.requestStatusesFetch(); cmd != nil {
+				refreshCmds = append(refreshCmds, cmd)
+			}
+			if cmd := m.requestScanFetch(true); cmd != nil {
+				refreshCmds = append(refreshCmds, cmd)
+			}
+			return m, tea.Batch(refreshCmds...)
 
 		case key.Matches(msg, dashKeys.ContextRefresh):
 			// Force context refresh (same as regular refresh but with user intent to see context)
-			return m, tea.Batch(
-				m.fetchSessionDataWithOutputs(),
-				m.fetchStatuses(),
-				m.fetchScanStatus(),
-			)
+			var refreshCmds []tea.Cmd
+			if cmd := m.requestSessionFetch(true); cmd != nil {
+				refreshCmds = append(refreshCmds, cmd)
+			}
+			if cmd := m.requestStatusesFetch(); cmd != nil {
+				refreshCmds = append(refreshCmds, cmd)
+			}
+			if cmd := m.requestScanFetch(true); cmd != nil {
+				refreshCmds = append(refreshCmds, cmd)
+			}
+			return m, tea.Batch(refreshCmds...)
 
 		case key.Matches(msg, dashKeys.MailRefresh):
 			// Refresh Agent Mail data
@@ -1146,6 +1416,14 @@ func (m Model) View() string {
 	statsBar := m.renderStatsBar()
 	b.WriteString(center.Render(statsBar) + "\n\n")
 
+	if m.showDiagnostics {
+		diagWidth := m.width - 4
+		if diagWidth < 20 {
+			diagWidth = 20
+		}
+		b.WriteString(m.renderDiagnosticsBar(diagWidth) + "\n\n")
+	}
+
 	// ═══════════════════════════════════════════════════════════════
 	// RATE LIMIT ALERT (if any agent is rate limited)
 	// ═══════════════════════════════════════════════════════════════
@@ -1156,13 +1434,30 @@ func (m Model) View() string {
 	// ═══════════════════════════════════════════════════════════════
 	// PANE GRID VISUALIZATION
 	// ═══════════════════════════════════════════════════════════════
-	if m.err != nil {
-		errorStyle := lipgloss.NewStyle().Foreground(t.Error)
-		b.WriteString("  " + errorStyle.Render(ic.Cross+" Error: "+m.err.Error()) + "\n")
-	} else if len(m.panes) == 0 {
-		emptyStyle := lipgloss.NewStyle().Foreground(t.Overlay).Italic(true)
-		b.WriteString("  " + emptyStyle.Render("No panes found in session") + "\n")
+	stateWidth := m.width - 4
+	if stateWidth < 20 {
+		stateWidth = 20
+	}
+
+	if len(m.panes) == 0 {
+		if m.err != nil {
+			b.WriteString(components.ErrorState(m.err.Error(), hintForSessionFetchError(m.err), stateWidth) + "\n")
+		} else if m.fetchingSession {
+			message := "Fetching panes…"
+			if !m.lastPaneFetch.IsZero() {
+				elapsed := time.Since(m.lastPaneFetch).Round(100 * time.Millisecond)
+				if elapsed > 0 {
+					message = fmt.Sprintf("Fetching panes… (%s)", elapsed)
+				}
+			}
+			b.WriteString(components.LoadingState(message, stateWidth) + "\n")
+		} else {
+			b.WriteString(components.EmptyState("No panes found in session", stateWidth) + "\n")
+		}
 	} else {
+		if m.err != nil {
+			b.WriteString(components.ErrorState(m.err.Error(), hintForSessionFetchError(m.err), stateWidth) + "\n\n")
+		}
 		// Responsive layout selection
 		switch {
 		case m.tier >= layout.TierMega:
@@ -1655,6 +1950,7 @@ func (m Model) renderHelpBar() string {
 		{"c", "context"},
 		{"m", "mail"},
 		{"r", "refresh"},
+		{"d", "diag"},
 		{"?", "help"},
 		{"q", "quit"},
 	}
@@ -1665,6 +1961,77 @@ func (m Model) renderHelpBar() string {
 	}
 
 	return strings.Join(parts, "  ")
+}
+
+func (m Model) renderDiagnosticsBar(width int) string {
+	t := m.theme
+
+	labelStyle := lipgloss.NewStyle().Foreground(t.Subtext).Bold(true)
+	valueStyle := lipgloss.NewStyle().Foreground(t.Text)
+	warnStyle := lipgloss.NewStyle().Foreground(t.Warning)
+	errStyle := lipgloss.NewStyle().Foreground(t.Error)
+
+	sessionPart := valueStyle.Render("ok")
+	if m.fetchingSession {
+		elapsed := time.Since(m.lastPaneFetch).Round(100 * time.Millisecond)
+		sessionPart = warnStyle.Render("fetching " + elapsed.String())
+	} else if m.sessionFetchLatency > 0 {
+		sessionPart = valueStyle.Render(m.sessionFetchLatency.Round(time.Millisecond).String())
+	}
+	if m.err != nil {
+		sessionPart = errStyle.Render("error")
+	}
+
+	statusPart := valueStyle.Render("ok")
+	if m.fetchingContext {
+		elapsed := time.Since(m.lastContextFetch).Round(100 * time.Millisecond)
+		statusPart = warnStyle.Render("fetching " + elapsed.String())
+	} else if m.statusFetchLatency > 0 {
+		statusPart = valueStyle.Render(m.statusFetchLatency.Round(time.Millisecond).String())
+	}
+	if m.statusFetchErr != nil {
+		statusPart = errStyle.Render("error")
+	}
+
+	parts := []string{
+		labelStyle.Render("diag"),
+		labelStyle.Render("tmux") + ":" + sessionPart,
+		labelStyle.Render("status") + ":" + statusPart,
+	}
+
+	box := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(t.Surface1).
+		Padding(0, 1).
+		Width(width)
+
+	return box.Render(strings.Join(parts, "  "))
+}
+
+func hintForSessionFetchError(err error) string {
+	if err == nil {
+		return ""
+	}
+
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "tmux is responding slowly. Press r to retry or p to pause auto-refresh"
+	}
+
+	msg := err.Error()
+	switch {
+	case strings.Contains(msg, "tmux is not installed"):
+		return "Install tmux, then run: ntm deps -v"
+	case strings.Contains(msg, "executable file not found"):
+		return "Install tmux, then run: ntm deps -v"
+	case strings.Contains(msg, "no server running"):
+		return "Start tmux or create a session with: ntm spawn <name>"
+	case strings.Contains(msg, "failed to connect to server"):
+		return "Start tmux or create a session with: ntm spawn <name>"
+	case strings.Contains(msg, "can't find session"), strings.Contains(msg, "session not found"):
+		return "Session may have ended. Create a new one with: ntm spawn <name>"
+	}
+
+	return "Press r to retry"
 }
 
 func maxInt(a, b int) int {
@@ -2228,8 +2595,8 @@ func (m Model) renderPaneDetail(width int) string {
 }
 
 // Run starts the dashboard
-func Run(session string) error {
-	model := New(session)
+func Run(session, projectDir string) error {
+	model := New(session, projectDir)
 	p := tea.NewProgram(model, tea.WithAltScreen())
 	_, err := p.Run()
 	return err
