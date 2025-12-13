@@ -59,9 +59,9 @@ func Execute(ctx context.Context, p Pipeline) error {
 		fmt.Println(" Done.")
 
 		// 6. Capture output
-		// We capture the whole buffer for now. Refining this to just the last response is hard without markers.
-		// A simple heuristic is to take the last 50 lines.
-		output, err := tmux.CapturePaneOutput(paneID, 50)
+		// We capture a larger buffer to ensure we get the full response.
+		// 2000 lines should cover most responses without being excessive.
+		output, err := tmux.CapturePaneOutput(paneID, 2000)
 		if err != nil {
 			return fmt.Errorf("stage %d capturing output: %w", i+1, err)
 		}
@@ -127,8 +127,14 @@ func waitForIdle(ctx context.Context, detector status.Detector, paneID string) e
 }
 
 func truncate(s string, n int) string {
+	if n <= 0 {
+		return ""
+	}
 	if len(s) <= n {
 		return s
+	}
+	if n <= 3 {
+		return s[:n]
 	}
 	return s[:n-3] + "..."
 }

@@ -5,9 +5,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
 	"github.com/charmbracelet/lipgloss"
 	"golang.org/x/term"
+
+	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
 )
 
 // CLIError represents a structured CLI error with remediation hints.

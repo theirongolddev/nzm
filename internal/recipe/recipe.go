@@ -232,9 +232,8 @@ func BuiltinNames() []string {
 
 // ValidateAgentSpec validates an agent specification.
 func ValidateAgentSpec(spec AgentSpec) error {
-	validTypes := map[string]bool{"cc": true, "cod": true, "gmi": true}
-	if !validTypes[spec.Type] {
-		return fmt.Errorf("invalid agent type: %s (must be cc, cod, or gmi)", spec.Type)
+	if spec.Type == "" {
+		return fmt.Errorf("agent type is required")
 	}
 	if spec.Count < 1 {
 		return fmt.Errorf("agent count must be at least 1, got %d", spec.Count)

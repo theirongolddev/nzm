@@ -27,7 +27,8 @@ type Extraction struct {
 
 // fencePattern matches markdown code fences
 // Matches: ```language\ncode\n``` or ```\ncode\n```
-var fencePattern = regexp.MustCompile("(?m)^```(\\w*)\\r?\\n([\\s\\S]*?)^```")
+// Note: Language capture group allows for characters like +, #, -, etc.
+var fencePattern = regexp.MustCompile("(?m)^```([^\\r\\n]*)\\r?\\n([\\s\\S]*?)^```")
 
 // Parser extracts code blocks from text.
 type Parser struct {
@@ -95,16 +96,49 @@ func (p *Parser) Parse(text string) []CodeBlock {
 	return blocks
 }
 
+// languageMap maps aliases to canonical language names
+var languageMap = map[string]string{
+	"js": "javascript", "jsx": "javascript", "javascript": "javascript",
+	"ts": "typescript", "tsx": "typescript", "typescript": "typescript",
+	"py": "python", "python": "python",
+	"rb": "ruby", "ruby": "ruby",
+	"sh": "bash", "shell": "bash", "zsh": "bash", "bash": "bash",
+	"yml": "yaml", "yaml": "yaml",
+	"dockerfile": "docker", "docker": "docker",
+	"md": "markdown", "markdown": "markdown",
+	"c++": "cpp", "cpp": "cpp", "cc": "cpp", "cxx": "cpp", "hpp": "cpp",
+	"c": "c", "h": "c",
+	"cs": "csharp", "csharp": "csharp",
+	"rs": "rust", "rust": "rust",
+	"kt": "kotlin", "kotlin": "kotlin",
+	"go": "go",
+	"java": "java",
+	"php": "php",
+	"html": "html",
+	"css": "css",
+	"scss": "scss", "sass": "scss",
+	"less": "less",
+	"sql": "sql",
+	"json": "json",
+	"xml": "xml",
+	"toml": "toml",
+	"lua": "lua",
+	"pl": "perl", "perl": "perl",
+	"r": "r",
+	"swift": "swift",
+	"scala": "scala",
+	"el": "elisp", "lisp": "lisp",
+	"clj": "clojure",
+	"tf": "terraform",
+	"vim": "vim",
+}
+
 // matchesLanguage checks if a language matches the filter.
 func (p *Parser) matchesLanguage(lang string) bool {
 	lang = normalizeLanguage(lang)
 	for _, filter := range p.LanguageFilter {
 		filter = normalizeLanguage(filter)
 		if lang == filter {
-			return true
-		}
-		// Also check aliases
-		if isLanguageAlias(lang, filter) {
 			return true
 		}
 	}
@@ -114,54 +148,13 @@ func (p *Parser) matchesLanguage(lang string) bool {
 // normalizeLanguage normalizes language names.
 func normalizeLanguage(lang string) string {
 	lang = strings.ToLower(strings.TrimSpace(lang))
-	// Normalize common aliases
-	switch lang {
-	case "js":
-		return "javascript"
-	case "ts":
-		return "typescript"
-	case "py":
-		return "python"
-	case "rb":
-		return "ruby"
-	case "sh", "shell":
-		return "bash"
-	case "yml":
-		return "yaml"
-	case "dockerfile":
-		return "docker"
-	case "md":
-		return "markdown"
-	case "":
+	if lang == "" {
 		return "text"
 	}
+	if canonical, ok := languageMap[lang]; ok {
+		return canonical
+	}
 	return lang
-}
-
-// isLanguageAlias checks if two language identifiers refer to the same language.
-func isLanguageAlias(lang1, lang2 string) bool {
-	aliases := map[string][]string{
-		"javascript": {"js"},
-		"typescript": {"ts"},
-		"python":     {"py"},
-		"ruby":       {"rb"},
-		"bash":       {"sh", "shell"},
-		"yaml":       {"yml"},
-		"docker":     {"dockerfile"},
-		"markdown":   {"md"},
-	}
-
-	for canonical, alts := range aliases {
-		if lang1 == canonical || lang2 == canonical {
-			for _, alt := range alts {
-				if lang1 == alt || lang2 == alt {
-					return true
-				}
-			}
-			return lang1 == canonical && lang2 == canonical
-		}
-	}
-	return false
 }
 
 // detectFilePath attempts to detect the file path from code block content.

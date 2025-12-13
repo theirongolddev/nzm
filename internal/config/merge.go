@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // LoadMerged loads the global config and merges any project-specific config found starting from cwd.
@@ -53,15 +54,62 @@ func MergeConfig(global *Config, project *ProjectConfig, projectDir string) *Con
 
 	// Merge Palette File
 	if project.Palette.File != "" {
+		// Try .ntm/ first (legacy/convention)
 		palettePath := filepath.Join(projectDir, ".ntm", project.Palette.File)
+		if _, err := os.Stat(palettePath); os.IsNotExist(err) {
+			// Try relative to project root
+			palettePath = filepath.Join(projectDir, project.Palette.File)
+		}
+
 		if cmds, err := LoadPaletteFromMarkdown(palettePath); err == nil && len(cmds) > 0 {
-			// Append project commands to global palette
-			// Deduplicate based on key? Or just append?
-			// Task says "Arrays are merged".
-			// Simple append for now.
-			global.Palette = append(global.Palette, cmds...)
+			// Prepend project commands so they take precedence
+			allCmds := append(cmds, global.Palette...)
+
+			// Deduplicate by key
+			seen := make(map[string]bool)
+			unique := make([]PaletteCmd, 0, len(allCmds))
+			for _, cmd := range allCmds {
+				if !seen[cmd.Key] {
+					seen[cmd.Key] = true
+					unique = append(unique, cmd)
+				}
+			}
+			global.Palette = unique
 		}
 	}
 
+	// Merge palette state (favorites/pins). Project entries come first.
+	global.PaletteState.Pinned = mergeStringListPreferFirst(project.PaletteState.Pinned, global.PaletteState.Pinned)
+	global.PaletteState.Favorites = mergeStringListPreferFirst(project.PaletteState.Favorites, global.PaletteState.Favorites)
+
 	return global
+}
+
+func mergeStringListPreferFirst(primary, secondary []string) []string {
+	if len(primary) == 0 && len(secondary) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]bool, len(primary)+len(secondary))
+	out := make([]string, 0, len(primary)+len(secondary))
+	for _, v := range primary {
+		v = strings.TrimSpace(v)
+		if v == "" || seen[v] {
+			continue
+		}
+		seen[v] = true
+		out = append(out, v)
+	}
+	for _, v := range secondary {
+		v = strings.TrimSpace(v)
+		if v == "" || seen[v] {
+			continue
+		}
+		seen[v] = true
+		out = append(out, v)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }

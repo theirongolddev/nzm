@@ -10,10 +10,11 @@ import (
 
 // ProjectConfig represents the structure of .ntm/config.toml
 type ProjectConfig struct {
-	Defaults  ProjectDefaults  `toml:"defaults"`
-	Palette   ProjectPalette   `toml:"palette"`
-	Templates ProjectTemplates `toml:"templates"`
-	Agents    AgentConfig      `toml:"agents"`
+	Defaults     ProjectDefaults  `toml:"defaults"`
+	Palette      ProjectPalette   `toml:"palette"`
+	PaletteState PaletteState     `toml:"palette_state"`
+	Templates    ProjectTemplates `toml:"templates"`
+	Agents       AgentConfig      `toml:"agents"`
 }
 
 // ProjectDefaults holds default settings for the project
@@ -95,6 +96,10 @@ func InitProjectConfig() error {
 
 [palette]
 # file = "palette.md"  # Relative to .ntm/
+
+[palette_state]
+# pinned = ["build", "test"]
+# favorites = ["build"]
 
 [templates]
 # dir = "templates"    # Relative to .ntm/

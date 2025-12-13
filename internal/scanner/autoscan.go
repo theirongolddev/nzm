@@ -29,6 +29,9 @@ type AutoScannerConfig struct {
 	// Common defaults like .git, node_modules are added automatically.
 	ExcludePatterns []string
 
+	// UBSPath is the path to the ubs binary. If empty, looks in PATH.
+	UBSPath string
+
 	// ScanOptions are passed to the scanner.
 	ScanOptions ScanOptions
 
@@ -71,6 +74,7 @@ func AutoScannerConfigFromProjectConfig(projectDir string, cfg *config.ScannerCo
 		if len(cfg.Defaults.Exclude) > 0 {
 			auto.ExcludePatterns = cfg.Defaults.Exclude
 		}
+		auto.UBSPath = cfg.UBSPath
 		auto.ScanOptions = ScanOptionsFromConfig(cfg, "dashboard")
 	}
 
@@ -93,7 +97,15 @@ type AutoScanner struct {
 // NewAutoScanner creates a new AutoScanner instance.
 // Returns an error if UBS is not available.
 func NewAutoScanner(cfg AutoScannerConfig) (*AutoScanner, error) {
-	s, err := New()
+	var s *Scanner
+	var err error
+
+	if cfg.UBSPath != "" {
+		s = &Scanner{binaryPath: cfg.UBSPath}
+	} else {
+		s, err = New()
+	}
+
 	if err != nil {
 		return nil, err
 	}

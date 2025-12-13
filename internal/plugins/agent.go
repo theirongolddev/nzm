@@ -42,12 +42,18 @@ func LoadAgentPlugins(dir string) ([]AgentPlugin, error) {
 			path := filepath.Join(dir, entry.Name())
 			var cfg agentConfigFile
 			if _, err := toml.DecodeFile(path, &cfg); err != nil {
-				return nil, fmt.Errorf("failed to parse %s: %w", path, err)
+				fmt.Printf("⚠ Warning: failed to parse plugin %s: %v\n", entry.Name(), err)
+				continue
 			}
 
 			// Set defaults/validate
 			if cfg.Agent.Name == "" {
 				cfg.Agent.Name = strings.TrimSuffix(entry.Name(), ".toml")
+			}
+
+			if cfg.Agent.Command == "" {
+				fmt.Printf("⚠ Warning: plugin %s missing 'command' field, skipping\n", cfg.Agent.Name)
+				continue
 			}
 
 			plugins = append(plugins, cfg.Agent)

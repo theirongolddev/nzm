@@ -462,23 +462,23 @@ func gitCheckIgnored(root string, entries []fileEntry) (map[string]bool, error) 
 	var buf bytes.Buffer
 	for _, e := range entries {
 		buf.WriteString(e.path)
-		buf.WriteByte('\n')
+		buf.WriteByte(0) // Null terminator for -z
 	}
 
-	cmd := exec.Command("git", "-C", root, "check-ignore", "--stdin")
+	cmd := exec.Command("git", "-C", root, "check-ignore", "-z", "--stdin")
 	cmd.Stdin = &buf
 	out, err := cmd.Output()
 	if err != nil {
 		return result, err
 	}
 
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	for _, line := range lines {
-		if line == "" {
+	// Split by null byte
+	parts := bytes.Split(out, []byte{0})
+	for _, part := range parts {
+		if len(part) == 0 {
 			continue
 		}
-		// git may echo only the path
-		result[line] = true
+		result[string(part)] = true
 	}
 	return result, nil
 }

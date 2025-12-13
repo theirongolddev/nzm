@@ -449,6 +449,10 @@ func (w *Watcher) handleEvent(fsEvent fsnotify.Event) {
 
 	w.debouncer.Trigger(func() {
 		w.mu.Lock()
+		if w.closed {
+			w.mu.Unlock()
+			return
+		}
 		toDeliver := w.pendingEvents
 		w.pendingEvents = nil
 		w.mu.Unlock()
@@ -539,6 +543,10 @@ func (w *Watcher) pollOnce() {
 
 	w.debouncer.Trigger(func() {
 		w.mu.Lock()
+		if w.closed {
+			w.mu.Unlock()
+			return
+		}
 		toDeliver := w.pendingEvents
 		w.pendingEvents = nil
 		w.mu.Unlock()

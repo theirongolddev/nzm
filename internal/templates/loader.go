@@ -1,6 +1,7 @@
 package templates
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -48,6 +49,8 @@ func (l *Loader) Load(name string) (*Template, error) {
 	if l.projectDir != "" {
 		if tmpl, err := l.loadFromDir(l.projectDir, name, SourceProject); err == nil {
 			return tmpl, nil
+		} else if !os.IsNotExist(err) {
+			return nil, err
 		}
 	}
 
@@ -55,6 +58,8 @@ func (l *Loader) Load(name string) (*Template, error) {
 	if l.userDir != "" {
 		if tmpl, err := l.loadFromDir(l.userDir, name, SourceUser); err == nil {
 			return tmpl, nil
+		} else if !os.IsNotExist(err) {
+			return nil, err
 		}
 	}
 
@@ -77,7 +82,7 @@ func (l *Loader) loadFromDir(dir, name string, source TemplateSource) (*Template
 
 	tmpl, err := Parse(string(content))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parsing template %s: %w", path, err)
 	}
 
 	// Override name if not set in frontmatter

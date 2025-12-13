@@ -83,16 +83,16 @@ func (o *Orchestrator) TerminateSession(paneID string, provider string) error {
 	return nil
 }
 
+var shellPromptRegexps = []*regexp.Regexp{
+	regexp.MustCompile(`\$\s*$`), // bash prompt
+	regexp.MustCompile(`%\s*$`),  // zsh prompt
+	regexp.MustCompile(`>\s*$`),  // generic prompt
+}
+
 // WaitForShellPrompt waits until the pane shows a shell prompt
 func (o *Orchestrator) WaitForShellPrompt(paneID string, timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-
-	promptPatterns := []string{
-		`\$\s*$`, // bash prompt
-		`%\s*$`,  // zsh prompt
-		`>\s*$`,  // generic prompt
-	}
 
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
@@ -103,8 +103,8 @@ func (o *Orchestrator) WaitForShellPrompt(paneID string, timeout time.Duration) 
 			return ctx.Err()
 		case <-ticker.C:
 			output, _ := o.captureOutput(paneID, 5) // Capture last 5 lines
-			for _, pattern := range promptPatterns {
-				if regexp.MustCompile(pattern).MatchString(output) {
+			for _, re := range shellPromptRegexps {
+				if re.MatchString(output) {
 					return nil
 				}
 			}

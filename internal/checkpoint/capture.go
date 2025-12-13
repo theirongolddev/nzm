@@ -118,7 +118,10 @@ func (c *Capturer) captureSessionState(sessionName string) (SessionState, error)
 	}
 
 	// Get layout string
-	layout, _ := getSessionLayout(sessionName)
+	layout, err := getSessionLayout(sessionName)
+	if err != nil {
+		fmt.Printf("Warning: failed to capture session layout: %v\n", err)
+	}
 
 	return SessionState{
 		Panes:           paneStates,
@@ -188,6 +191,11 @@ func (c *Capturer) captureGitState(workingDir, sessionName, checkpointID string)
 
 	// Capture uncommitted changes as patch
 	if state.IsDirty {
+		// Warn about untracked files if any
+		if state.UntrackedCount > 0 {
+			fmt.Printf("Warning: %d untracked file(s) will not be captured in git patch (only staged/unstaged tracked changes)\n", state.UntrackedCount)
+		}
+
 		// Get diff of tracked changes (both staged and unstaged)
 		patch, err := gitCommand(workingDir, "diff", "HEAD")
 		if err == nil && patch != "" {

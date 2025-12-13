@@ -306,6 +306,10 @@ func writeJSON(path string, data interface{}) error {
 		return fmt.Errorf("closing temp file: %w", err)
 	}
 
+	if err := os.Chmod(tmpFile.Name(), 0644); err != nil {
+		return fmt.Errorf("chmod temp file: %w", err)
+	}
+
 	if err := os.Rename(tmpFile.Name(), path); err != nil {
 		return fmt.Errorf("renaming temp file: %w", err)
 	}

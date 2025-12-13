@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -22,6 +23,17 @@ func (c *Config) GenerateAgentCommand(tmplStr string, vars AgentTemplateVars) (s
 		return tmplStr, nil
 	}
 
+	// Validate variables for safety
+	if err := validateSafeString(vars.Model, "Model"); err != nil {
+		return "", err
+	}
+	if err := validateSafeString(vars.ModelAlias, "ModelAlias"); err != nil {
+		return "", err
+	}
+	if err := validateSafeString(vars.PersonaName, "PersonaName"); err != nil {
+		return "", err
+	}
+
 	t, err := template.New("agent").Parse(tmplStr)
 	if err != nil {
 		return "", fmt.Errorf("parsing agent command template: %w", err)
@@ -35,6 +47,17 @@ func (c *Config) GenerateAgentCommand(tmplStr string, vars AgentTemplateVars) (s
 	return buf.String(), nil
 }
 
+func validateSafeString(s, name string) error {
+	if s == "" {
+		return nil
+	}
+	// Reject shell metacharacters
+	if strings.ContainsAny(s, "&|;`$()<>") {
+		return fmt.Errorf("%s contains unsafe characters", name)
+	}
+	return nil
+}
+
 // Config represents the main configuration
 type Config struct {
 	ProjectsBase  string            `toml:"projects_base"`
@@ -42,6 +65,7 @@ type Config struct {
 	PaletteFile   string            `toml:"palette_file"` // Path to command_palette.md (optional)
 	Agents        AgentConfig       `toml:"agents"`
 	Palette       []PaletteCmd      `toml:"palette"`
+	PaletteState  PaletteState      `toml:"palette_state"`
 	Tmux          TmuxConfig        `toml:"tmux"`
 	AgentMail     AgentMailConfig   `toml:"agent_mail"`
 	Models        ModelsConfig      `toml:"models"`
@@ -361,6 +385,13 @@ type PaletteCmd struct {
 	Prompt   string   `toml:"prompt"`
 	Category string   `toml:"category,omitempty"`
 	Tags     []string `toml:"tags,omitempty"`
+}
+
+// PaletteState stores user palette preferences (favorites/pins).
+// This is persisted in config files under [palette_state].
+type PaletteState struct {
+	Pinned    []string `toml:"pinned,omitempty"`
+	Favorites []string `toml:"favorites,omitempty"`
 }
 
 // TmuxConfig holds tmux-specific settings
@@ -1070,6 +1101,104 @@ func CreateDefault() (string, error) {
 	return path, nil
 }
 
+// UpsertPaletteState updates (or adds) the [palette_state] TOML table in the given config file.
+// This preserves the rest of the file verbatim, avoiding re-encoding the full config.
+func UpsertPaletteState(path string, state PaletteState) error {
+	if path == "" {
+		return fmt.Errorf("config path is empty")
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	updated := upsertTOMLTable(string(data), "palette_state", renderPaletteStateTOML(state))
+
+	mode := os.FileMode(0644)
+	if info, err := os.Stat(path); err == nil {
+		mode = info.Mode().Perm()
+	}
+
+	return os.WriteFile(path, []byte(updated), mode)
+}
+
+func upsertTOMLTable(contents, tableName, tableBody string) string {
+	lines := strings.Split(contents, "\n")
+
+	header := "[" + tableName + "]"
+	start := -1
+	end := len(lines)
+
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if start == -1 {
+			if trimmed == header {
+				start = i
+			}
+			continue
+		}
+
+		// Stop at the next table header ([...] or [[...]]), but only after we found our table.
+		if i > start && strings.HasPrefix(trimmed, "[") {
+			end = i
+			break
+		}
+	}
+
+	if start != -1 {
+		lines = append(lines[:start], lines[end:]...)
+	}
+
+	// Trim trailing empty lines so we can append cleanly.
+	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
+		lines = lines[:len(lines)-1]
+	}
+
+	out := strings.Join(lines, "\n")
+	if out != "" {
+		out += "\n\n"
+	}
+	out += tableBody
+
+	if !strings.HasSuffix(out, "\n") {
+		out += "\n"
+	}
+	return out
+}
+
+func renderPaletteStateTOML(state PaletteState) string {
+	return fmt.Sprintf(
+		"[palette_state]\n"+
+			"pinned = %s\n"+
+			"favorites = %s\n",
+		renderTOMLStringArray(state.Pinned),
+		renderTOMLStringArray(state.Favorites),
+	)
+}
+
+func renderTOMLStringArray(values []string) string {
+	if len(values) == 0 {
+		return "[]"
+	}
+
+	seen := make(map[string]bool, len(values))
+	parts := make([]string, 0, len(values))
+	for _, v := range values {
+		v = strings.TrimSpace(v)
+		if v == "" || seen[v] {
+			continue
+		}
+		seen[v] = true
+		parts = append(parts, strconv.Quote(v))
+	}
+
+	if len(parts) == 0 {
+		return "[]"
+	}
+	return "[ " + strings.Join(parts, ", ") + " ]"
+}
+
 // Print writes config to a writer in TOML format
 func Print(cfg *Config, w io.Writer) error {
 	// Write a nicely formatted config file
@@ -1096,6 +1225,21 @@ func Print(cfg *Config, w io.Writer) error {
 		fmt.Fprintf(w, "palette_file = %q\n", cfg.PaletteFile)
 	} else {
 		fmt.Fprintln(w, "# palette_file = \"~/.config/ntm/command_palette.md\"")
+	}
+	fmt.Fprintln(w)
+
+	fmt.Fprintln(w, "# Palette state (favorites/pins)")
+	fmt.Fprintln(w, "# Managed by the command palette UI (ntm palette)")
+	fmt.Fprintln(w, "[palette_state]")
+	if len(cfg.PaletteState.Pinned) > 0 {
+		fmt.Fprintf(w, "pinned = %s\n", renderTOMLStringArray(cfg.PaletteState.Pinned))
+	} else {
+		fmt.Fprintln(w, "# pinned = []")
+	}
+	if len(cfg.PaletteState.Favorites) > 0 {
+		fmt.Fprintf(w, "favorites = %s\n", renderTOMLStringArray(cfg.PaletteState.Favorites))
+	} else {
+		fmt.Fprintln(w, "# favorites = []")
 	}
 	fmt.Fprintln(w)
 

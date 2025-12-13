@@ -22,8 +22,7 @@ func EstimateTokens(text string) int {
 		return 0
 	}
 	// ~3.5 chars per token for typical English text/code
-	// Using 10/35 to avoid floating point while maintaining accuracy
-	return len(text) * 10 / 35
+	return int(float64(len(text)) / 3.5)
 }
 
 // EstimateTokensWithLanguageHint provides a more accurate estimate based on content type.

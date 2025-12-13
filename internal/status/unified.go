@@ -1,6 +1,7 @@
 package status
 
 import (
+	"context"
 	"strings"
 	"time"
 
@@ -116,13 +117,27 @@ func (d *UnifiedDetector) Detect(paneID string) (AgentStatus, error) {
 // DetectAll returns status for all panes in a session.
 // Errors on individual panes don't fail the entire operation.
 func (d *UnifiedDetector) DetectAll(session string) ([]AgentStatus, error) {
-	panes, err := tmux.GetPanesWithActivity(session)
+	return d.DetectAllContext(context.Background(), session)
+}
+
+// DetectAllContext returns status for all panes in a session with cancellation support.
+// Errors on individual panes don't fail the entire operation.
+func (d *UnifiedDetector) DetectAllContext(ctx context.Context, session string) ([]AgentStatus, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	panes, err := tmux.GetPanesWithActivityContext(ctx, session)
 	if err != nil {
 		return nil, err
 	}
 
 	statuses := make([]AgentStatus, 0, len(panes))
 	for _, pane := range panes {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+
 		status := AgentStatus{
 			PaneID:     pane.Pane.ID,
 			PaneName:   pane.Pane.Title,
@@ -133,8 +148,11 @@ func (d *UnifiedDetector) DetectAll(session string) ([]AgentStatus, error) {
 		}
 
 		// Capture output for this pane
-		output, err := tmux.CapturePaneOutput(pane.Pane.ID, d.config.ScanLines)
+		output, err := tmux.CapturePaneOutputContext(ctx, pane.Pane.ID, d.config.ScanLines)
 		if err != nil {
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return nil, ctxErr
+			}
 			// Log but continue - one bad pane shouldn't fail all
 			statuses = append(statuses, status)
 			continue

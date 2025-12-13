@@ -91,18 +91,18 @@ func PrintHealth() error {
 	populateAgentHealth(&output)
 
 	// Get drift status
-	drift := bv.CheckDrift()
+	drift := bv.CheckDrift("")
 	output.DriftStatus = drift.Status.String()
 	output.DriftMessage = drift.Message
 
 	// Get top bottlenecks (limit to 5)
-	bottlenecks, err := bv.GetTopBottlenecks(5)
+	bottlenecks, err := bv.GetTopBottlenecks("", 5)
 	if err == nil {
 		output.TopBottlenecks = bottlenecks
 	}
 
 	// Get insights for keystones
-	insights, err := bv.GetInsights()
+	insights, err := bv.GetInsights("")
 	if err == nil && insights != nil {
 		keystones := insights.Keystones
 		if len(keystones) > 5 {
@@ -112,7 +112,7 @@ func PrintHealth() error {
 	}
 
 	// Get priority recommendations
-	recommendations, err := bv.GetNextActions(5)
+	recommendations, err := bv.GetNextActions("", 5)
 	if err == nil {
 		for _, rec := range recommendations {
 			var reason string
@@ -129,7 +129,7 @@ func PrintHealth() error {
 	}
 
 	// Get dependency context (includes ready/in-progress/blocked counts)
-	depCtx, err := bv.GetDependencyContext(5)
+	depCtx, err := bv.GetDependencyContext("", 5)
 	if err == nil {
 		output.DependencyContext = depCtx
 		output.ReadyCount = depCtx.ReadyCount

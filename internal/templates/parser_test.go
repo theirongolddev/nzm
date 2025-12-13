@@ -1,6 +1,9 @@
 package templates
 
 import (
+	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -248,6 +251,35 @@ The {{adjective}} {{noun}}.`
 		if !found {
 			t.Errorf("Variable %q not found", e)
 		}
+	}
+}
+
+func TestLoader_Load_ReturnsParseError(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmp)
+
+	projectDir := filepath.Join(tmp, "project")
+	templateDir := filepath.Join(projectDir, ".ntm", "templates")
+	if err := os.MkdirAll(templateDir, 0755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+
+	name := "bad_parse_template"
+	// Invalid YAML frontmatter: unclosed sequence.
+	content := "---\nname: [\n---\nHello\n"
+	if err := os.WriteFile(filepath.Join(templateDir, name+".md"), []byte(content), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	loader := NewLoaderWithProject(projectDir)
+	_, err := loader.Load(name)
+	if err == nil {
+		t.Fatalf("Load(%q) expected error, got nil", name)
+	}
+
+	var notFound *TemplateNotFoundError
+	if errors.As(err, &notFound) {
+		t.Fatalf("Load(%q) returned TemplateNotFoundError; want parse error: %v", name, err)
 	}
 }
 

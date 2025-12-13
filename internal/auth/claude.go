@@ -47,7 +47,7 @@ func (f *ClaudeAuthFlow) InitiateAuth(paneID string) error {
 
 // MonitorAuth watches the pane output for auth prompts and handles them
 func (f *ClaudeAuthFlow) MonitorAuth(ctx context.Context, paneID string) (*AuthResult, error) {
-	ticker := time.NewTicker(500 * time.Millisecond)
+	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
 	for {
@@ -97,12 +97,14 @@ func (f *ClaudeAuthFlow) SendContinuation(paneID, prompt string) error {
 	return tmux.SendKeys(paneID, prompt, true)
 }
 
+// claudeLoginURLRegex matches the Claude login URL
+var claudeLoginURLRegex = regexp.MustCompile(`https://claude\.ai/login\S+`)
+
 // DetectBrowserURL finds the auth URL in the output
 func (f *ClaudeAuthFlow) DetectBrowserURL(output string) (string, bool) {
 	// Pattern: "Visit https://claude.ai/login?..." or "Open this URL: https://..."
 	// We'll look for standard https links associated with claude/login
-	re := regexp.MustCompile(`https://claude\.ai/login\S+`)
-	match := re.FindString(output)
+	match := claudeLoginURLRegex.FindString(output)
 	if match != "" {
 		return match, true
 	}

@@ -11,34 +11,45 @@ type DuplicateCheckResult struct {
 	Recommendation  string      `json:"recommendation"` // "proceed", "review", "skip"
 }
 
-func (c *Client) CheckDuplicates(ctx context.Context, query, workspace, since string, threshold float64) (*DuplicateCheckResult, error) {
-	if threshold <= 0 {
-		threshold = 0.7
+type DuplicateCheckOptions struct {
+	Query     string
+	Workspace string
+	Since     string
+	Threshold float64
+	Limit     int
+}
+
+func (c *Client) CheckDuplicates(ctx context.Context, opts DuplicateCheckOptions) (*DuplicateCheckResult, error) {
+	if opts.Threshold <= 0 {
+		opts.Threshold = 0.7
 	}
-	if since == "" {
-		since = "7d"
+	if opts.Since == "" {
+		opts.Since = "7d"
+	}
+	if opts.Limit <= 0 {
+		opts.Limit = 5
 	}
 
 	// Search for similar sessions
 	// Note: CASS search score is usually relevant for similarity
 	resp, err := c.Search(ctx, SearchOptions{
-		Query:     query,
-		Workspace: workspace,
-		Since:     since,
-		Limit:     5,
+		Query:     opts.Query,
+		Workspace: opts.Workspace,
+		Since:     opts.Since,
+		Limit:     opts.Limit,
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	result := &DuplicateCheckResult{
-		Query:           query,
+		Query:           opts.Query,
 		SimilarSessions: []SearchHit{},
 		Recommendation:  "proceed",
 	}
 
 	for _, hit := range resp.Hits {
-		if hit.Score >= threshold {
+		if hit.Score >= opts.Threshold {
 			result.SimilarSessions = append(result.SimilarSessions, hit)
 		}
 	}

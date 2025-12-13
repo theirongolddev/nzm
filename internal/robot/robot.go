@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -545,7 +546,7 @@ func PrintStatus() error {
 
 	// Add beads summary if bv is available
 	if bv.IsInstalled() {
-		output.Beads = bv.GetBeadsSummary(BeadLimit)
+		output.Beads = bv.GetBeadsSummary(mustGetwd(), BeadLimit)
 		output.GraphMetrics = getGraphMetrics()
 	}
 
@@ -690,8 +691,10 @@ func getGraphMetrics() *GraphMetrics {
 		HealthStatus: "unknown",
 	}
 
+	wd := mustGetwd()
+
 	// Get health summary (drift + bottleneck count)
-	health, err := bv.GetHealthSummary()
+	health, err := bv.GetHealthSummary(wd)
 	if err == nil && health != nil {
 		switch health.DriftStatus {
 		case bv.DriftOK:
@@ -709,7 +712,7 @@ func getGraphMetrics() *GraphMetrics {
 	}
 
 	// Get top bottlenecks
-	bottlenecks, err := bv.GetTopBottlenecks(3)
+	bottlenecks, err := bv.GetTopBottlenecks(wd, 3)
 	if err == nil {
 		for _, b := range bottlenecks {
 			metrics.TopBottlenecks = append(metrics.TopBottlenecks, BottleneckInfo{
@@ -720,7 +723,7 @@ func getGraphMetrics() *GraphMetrics {
 	}
 
 	// Get keystone count
-	insights, err := bv.GetInsights()
+	insights, err := bv.GetInsights(wd)
 	if err == nil && insights != nil {
 		metrics.Keystones = len(insights.Keystones)
 	}
@@ -860,7 +863,7 @@ func getBeadRecommendations(limit int) ([]BeadAction, []string) {
 	}
 
 	// Get priority recommendations from bv
-	recommendations, err := bv.GetNextActions(limit)
+	recommendations, err := bv.GetNextActions("", limit)
 	if err != nil {
 		warnings = append(warnings, fmt.Sprintf("failed to get bv priority: %v", err))
 		return actions, warnings
@@ -876,7 +879,7 @@ func getBeadRecommendations(limit int) ([]BeadAction, []string) {
 	}
 
 	// Get graph positions in batch for efficiency
-	graphPositions, graphErr := bv.GetGraphPositionsBatch(issueIDs)
+	graphPositions, graphErr := bv.GetGraphPositionsBatch("", issueIDs)
 	if graphErr != nil {
 		warnings = append(warnings, fmt.Sprintf("failed to get graph positions: %v", graphErr))
 	}
@@ -1119,25 +1122,14 @@ func PrintTail(session string, lines int, paneFilter []string) error {
 	return encodeJSON(output)
 }
 
+// ansiRegex matches common ANSI escape sequences:
+// 1. CSI sequences: \x1b[ ... [a-zA-Z]
+// 2. OSC sequences: \x1b] ... \a or \x1b\
+var ansiRegex = regexp.MustCompile(`\x1b\[[0-9;?]*[a-zA-Z]|\x1b\][^\a\x1b]*(\a|\x1b\\)`)
+
 // stripANSI removes ANSI escape sequences from text
 func stripANSI(s string) string {
-	var result []byte
-	inEscape := false
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\x1b' {
-			inEscape = true
-			continue
-		}
-		if inEscape {
-			// End of escape sequence when we hit a letter
-			if (s[i] >= 'A' && s[i] <= 'Z') || (s[i] >= 'a' && s[i] <= 'z') {
-				inEscape = false
-			}
-			continue
-		}
-		result = append(result, s[i])
-	}
-	return string(result)
+	return ansiRegex.ReplaceAllString(s, "")
 }
 
 // splitLines splits text into lines, preserving empty lines
@@ -1496,7 +1488,7 @@ func PrintSnapshot(cfg *config.Config) error {
 	}
 
 	// Try to get beads summary
-	beads := bv.GetBeadsSummary(BeadLimit)
+	beads := bv.GetBeadsSummary("", BeadLimit)
 	if beads != nil {
 		output.BeadsSummary = beads
 	}
@@ -1872,8 +1864,10 @@ func PrintGraph() error {
 		output.Error = "bv (beads_viewer) is not installed"
 		// Even if bv is missing, still attempt correlation to provide partial data.
 	} else {
+		wd := mustGetwd()
+
 		// Get insights (bottlenecks, keystones, etc.)
-		insights, err := bv.GetInsights()
+		insights, err := bv.GetInsights(wd)
 		if err != nil {
 			output.Error = fmt.Sprintf("failed to get insights: %v", err)
 		} else {
@@ -1881,7 +1875,7 @@ func PrintGraph() error {
 		}
 
 		// Get priority recommendations
-		priority, err := bv.GetPriority()
+		priority, err := bv.GetPriority(wd)
 		if err != nil {
 			if output.Error == "" {
 				output.Error = fmt.Sprintf("failed to get priority: %v", err)
@@ -1891,7 +1885,7 @@ func PrintGraph() error {
 		}
 
 		// Get health summary
-		health, err := bv.GetHealthSummary()
+		health, err := bv.GetHealthSummary(wd)
 		if err != nil {
 			if output.Error == "" {
 				output.Error = fmt.Sprintf("failed to get health: %v", err)
@@ -1951,7 +1945,7 @@ func buildCorrelationGraph() *GraphCorrelation {
 	}
 
 	// Add bead assignments from bv summary (if present)
-	if beads := bv.GetBeadsSummary(BeadLimit); beads != nil && beads.Available {
+	if beads := bv.GetBeadsSummary(wd, BeadLimit); beads != nil && beads.Available {
 		for _, inProg := range beads.InProgressList {
 			node := GraphBeadNode{
 				Status: "in_progress",
@@ -2369,7 +2363,7 @@ func PrintTerse(cfg *config.Config) error {
 	// Get beads summary (shared across sessions)
 	var beadsSummary *bv.BeadsSummary
 	if bv.IsInstalled() {
-		beadsSummary = bv.GetBeadsSummary(0)
+		beadsSummary = bv.GetBeadsSummary("", 0)
 	}
 
 	// Get mail count (best-effort)

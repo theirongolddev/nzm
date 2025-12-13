@@ -232,7 +232,7 @@ func countAgentsByState(panes []tmux.Pane) map[string]int {
 
 // writeBeadsMarkdown writes the beads section.
 func writeBeadsMarkdown(sb *strings.Builder, opts MarkdownOptions) {
-	summary := bv.GetBeadsSummary(opts.MaxBeads)
+	summary := bv.GetBeadsSummary("", opts.MaxBeads)
 	if summary == nil || !summary.Available {
 		if opts.Compact {
 			sb.WriteString("### Beads: unavailable\n\n")

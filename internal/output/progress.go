@@ -6,9 +6,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
 	"github.com/charmbracelet/lipgloss"
 	"golang.org/x/term"
+
+	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
 )
 
 // StepStatus represents the outcome of a step.

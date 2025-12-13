@@ -3,19 +3,22 @@ package alerts
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
-	"os/exec"
+	"os"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/Dicklesworthstone/ntm/internal/bv"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
 )
 
 // Pre-compiled regexes for performance
 var (
-	ansiRegex = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`) // Corrected escape sequence for backslash
+	// ansiRegex matches common ANSI escape sequences:
+	// 1. CSI sequences: \x1b[ ... [a-zA-Z]
+	// 2. OSC sequences: \x1b] ... \a or \x1b\
+	ansiRegex = regexp.MustCompile(`\x1b\[[0-9;?]*[a-zA-Z]|\x1b\][^\a\x1b]*(\a|\x1b\\)`)
 
 	errorPatterns = []struct {
 		pattern  *regexp.Regexp
@@ -209,22 +212,9 @@ func (g *Generator) checkBeadState() []Alert {
 func (g *Generator) checkStaleBeads() []Alert {
 	var alerts []Alert
 
-	// Run bd list --status=in_progress --json
-	cmd := exec.Command("bd", "list", "--status=in_progress", "--json")
-	output, err := cmd.Output()
-	if err != nil {
-		return alerts
-	}
-
-	var beads []struct {
-		ID        string    `json:"id"`
-		Title     string    `json:"title"`
-		UpdatedAt time.Time `json:"updated_at"`
-		Assignee  string    `json:"assignee"`
-	}
-	if err := json.Unmarshal(output, &beads); err != nil {
-		return alerts
-	}
+	wd, _ := os.Getwd()
+	// Get all in-progress beads (limit 100)
+	beads := bv.GetInProgressList(wd, 100)
 
 	staleThreshold := time.Duration(g.config.BeadStaleHours) * time.Hour
 	now := time.Now()
@@ -255,19 +245,13 @@ func (g *Generator) checkStaleBeads() []Alert {
 
 // checkDependencyCycles uses bv to detect cycles in the dependency graph
 func (g *Generator) checkDependencyCycles() *Alert {
+	wd, _ := os.Getwd()
 	// Run bv --robot-insights and check for cycles
-	cmd := exec.Command("bv", "--robot-insights")
-	output, err := cmd.Output()
+	insights, err := bv.GetInsights(wd)
 	if err != nil {
-		return nil
-	}
-
-	var insights struct {
-		Cycles []struct {
-			Nodes []string `json:"nodes"`
-		} `json:"Cycles"`
-	}
-	if err := json.Unmarshal(output, &insights); err != nil {
+		if !strings.Contains(err.Error(), "executable file not found") {
+			fmt.Fprintf(os.Stderr, "Warning: failed to check dependency cycles (bv): %v\n", err)
+		}
 		return nil
 	}
 

@@ -188,8 +188,9 @@ func (rm *RecoveryManager) HandleCompactionEvent(event *CompactionEvent, session
 
 // GetRecoveryEvents returns recent recovery events.
 func (rm *RecoveryManager) GetRecoveryEvents() []RecoveryEvent {
-	rm.mu.RLock()
-	defer rm.mu.RUnlock()
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+
 	rm.pruneEvents()
 	result := make([]RecoveryEvent, len(rm.recoveryEvents))
 	copy(result, rm.recoveryEvents)
@@ -346,7 +347,7 @@ func GetBeadContext() *BeadContext {
 	ctx := &BeadContext{}
 
 	// Get top bottlenecks
-	bottlenecks, err := bv.GetTopBottlenecks(3)
+	bottlenecks, err := bv.GetTopBottlenecks("", 3)
 	if err == nil && len(bottlenecks) > 0 {
 		for _, b := range bottlenecks {
 			ctx.TopBottlenecks = append(ctx.TopBottlenecks, b.ID)
@@ -354,7 +355,7 @@ func GetBeadContext() *BeadContext {
 	}
 
 	// Get recommended actions
-	actions, err := bv.GetNextActions(3)
+	actions, err := bv.GetNextActions("", 3)
 	if err == nil && len(actions) > 0 {
 		for _, a := range actions {
 			ctx.NextActions = append(ctx.NextActions, fmt.Sprintf("[%s] %s", a.IssueID, a.Title))
@@ -362,7 +363,7 @@ func GetBeadContext() *BeadContext {
 	}
 
 	// Get health summary
-	health, err := bv.GetHealthSummary()
+	health, err := bv.GetHealthSummary("")
 	if err == nil && health != nil {
 		ctx.HealthStatus = health.DriftStatus.String()
 		ctx.HasDrift = health.DriftStatus == bv.DriftCritical || health.DriftStatus == bv.DriftWarning
@@ -370,7 +371,7 @@ func GetBeadContext() *BeadContext {
 
 	// Get dependency context (from bd, not bv)
 	if bv.IsBdInstalled() {
-		depCtx, err := bv.GetDependencyContext(5)
+		depCtx, err := bv.GetDependencyContext("", 5)
 		if err == nil && depCtx != nil {
 			ctx.BlockedCount = depCtx.BlockedCount
 			ctx.ReadyCount = depCtx.ReadyCount

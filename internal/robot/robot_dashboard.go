@@ -105,7 +105,7 @@ func PrintDashboard(jsonMode bool) error {
 
 	// Beads summary (best-effort)
 	if bv.IsInstalled() {
-		output.Beads = bv.GetBeadsSummary(BeadLimit)
+		output.Beads = bv.GetBeadsSummary(wd, BeadLimit)
 	}
 
 	// Alerts (best-effort)

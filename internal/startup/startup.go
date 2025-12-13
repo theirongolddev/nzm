@@ -36,6 +36,8 @@ type Manager struct {
 	currentPhase  Phase
 	phase1Done    bool
 	phase2Done    bool
+	phase1Start   time.Time
+	phase2Start   time.Time
 	phase1Time    time.Duration
 	phase2Time    time.Duration
 	deferredFuncs []DeferredFunc
@@ -58,6 +60,8 @@ func BeginPhase1() {
 	global.mu.Lock()
 	defer global.mu.Unlock()
 	global.currentPhase = Phase1
+	global.phase1Start = time.Now()
+	global.phase1Time = 0
 	if profiler.IsEnabled() {
 		profiler.StartWithPhase("phase1_start", "startup")
 	}
@@ -67,6 +71,9 @@ func BeginPhase1() {
 func EndPhase1() time.Duration {
 	global.mu.Lock()
 	defer global.mu.Unlock()
+	if !global.phase1Start.IsZero() {
+		global.phase1Time = time.Since(global.phase1Start)
+	}
 	global.phase1Done = true
 	global.currentPhase = Phase2
 	if profiler.IsEnabled() {
@@ -81,6 +88,9 @@ func EndPhase1() time.Duration {
 func BeginPhase2() {
 	global.mu.Lock()
 	defer global.mu.Unlock()
+	global.currentPhase = Phase2
+	global.phase2Start = time.Now()
+	global.phase2Time = 0
 	if profiler.IsEnabled() {
 		profiler.StartWithPhase("phase2_start", "deferred")
 	}
@@ -90,6 +100,9 @@ func BeginPhase2() {
 func EndPhase2() time.Duration {
 	global.mu.Lock()
 	defer global.mu.Unlock()
+	if !global.phase2Start.IsZero() {
+		global.phase2Time = time.Since(global.phase2Start)
+	}
 	global.phase2Done = true
 	global.currentPhase = PhaseComplete
 	if profiler.IsEnabled() {
@@ -172,6 +185,8 @@ func Reset() {
 	global.currentPhase = PhaseNone
 	global.phase1Done = false
 	global.phase2Done = false
+	global.phase1Start = time.Time{}
+	global.phase2Start = time.Time{}
 	global.phase1Time = 0
 	global.phase2Time = 0
 	global.deferredFuncs = nil
