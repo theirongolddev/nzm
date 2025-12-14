@@ -131,7 +131,7 @@ func SaveSessionAgent(sessionName, projectKey string, info *SessionAgentInfo) er
 		return fmt.Errorf("creating temp file: %w", err)
 	}
 	tmpPath := tmpFile.Name()
-	
+
 	// Ensure cleanup on error
 	defer func() {
 		_ = tmpFile.Close()
