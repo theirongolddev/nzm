@@ -2036,12 +2036,16 @@ func (m Model) renderPaneGrid() string {
 	availableWidth := m.width - 4 // Account for margins
 	cardWidth, cardsPerRow := styles.AdaptiveCardDimensions(availableWidth, minCardWidth, maxCardWidth, cardGap)
 
-	// On wide/ultra displays, show more detail per card
-	showExtendedInfo := m.tier >= layout.TierWide
+	// In grid mode (used below Split threshold), show more detail when card width allows it.
+	showExtendedInfo := cardWidth >= 24
+
+	rows := BuildPaneTableRows(m.panes, m.agentStatuses, m.paneStatus, &m.beadsSummary, m.fileChanges, m.animTick, t)
+	contextRanks := m.computeContextRanks()
 
 	var cards []string
 
 	for i, p := range m.panes {
+		row := rows[i]
 		isSelected := i == m.cursor
 
 		// Determine card colors based on agent type
@@ -2072,26 +2076,102 @@ func (m Model) renderPaneGrid() string {
 			borderColor = t.Pink
 		}
 
+		// Pulse border for active/working panes (if not selected)
+		if !isSelected && row.Status == "working" && m.animTick > 0 {
+			borderColor = styles.Pulse(string(borderColor), m.animTick)
+		}
+
 		// Build card content
 		var cardContent strings.Builder
 
 		// Header line with icon and title
+		statusIcon := "•"
+		statusColor := t.Overlay
+		switch row.Status {
+		case "working":
+			statusIcon = WorkingSpinnerFrame(m.animTick)
+			statusColor = t.Green
+		case "idle":
+			statusIcon = "○"
+			statusColor = t.Yellow
+		case "error":
+			statusIcon = "✗"
+			statusColor = t.Red
+		case "compacted":
+			statusIcon = "⚠"
+			statusColor = t.Peach
+		case "rate_limited":
+			statusIcon = "⏳"
+			statusColor = t.Maroon
+		}
+		statusStyled := lipgloss.NewStyle().Foreground(statusColor).Bold(true).Render(statusIcon)
+
 		iconStyled := lipgloss.NewStyle().Foreground(iconColor).Bold(true).Render(agentIcon)
-		title := layout.TruncateRunes(p.Title, maxInt(cardWidth-6, 10), "…")
+		title := layout.TruncateRunes(p.Title, maxInt(cardWidth-10, 10), "…")
 
 		titleStyled := lipgloss.NewStyle().Foreground(t.Text).Bold(true).Render(title)
-		cardContent.WriteString(iconStyled + " " + titleStyled + "\n")
+		cardContent.WriteString(statusStyled + " " + iconStyled + " " + titleStyled + "\n")
 
-		// Index badge with variant info on wide displays
+		// Index badge + compact badges
 		numBadge := lipgloss.NewStyle().
 			Foreground(t.Overlay).
 			Render(fmt.Sprintf("#%d", p.Index))
-		variantInfo := ""
-		if showExtendedInfo && p.Variant != "" {
-			variantStyle := lipgloss.NewStyle().Foreground(t.Subtext).Italic(true)
-			variantInfo = " " + variantStyle.Render("("+p.Variant+")")
+
+		var line2Parts []string
+		line2Parts = append(line2Parts, numBadge)
+		if p.Variant != "" {
+			label := layout.TruncateRunes(p.Variant, 12, "…")
+			modelBadge := styles.TextBadge(label, iconColor, t.Base, styles.BadgeOptions{
+				Style:    styles.BadgeStyleCompact,
+				Bold:     false,
+				ShowIcon: false,
+			})
+			line2Parts = append(line2Parts, modelBadge)
 		}
-		cardContent.WriteString(numBadge + variantInfo + "\n")
+		if showExtendedInfo {
+			if rank, ok := contextRanks[p.Index]; ok && rank > 0 {
+				rankBadge := styles.RankBadge(rank, styles.BadgeOptions{
+					Style:    styles.BadgeStyleCompact,
+					Bold:     false,
+					ShowIcon: false,
+				})
+				line2Parts = append(line2Parts, rankBadge)
+			}
+		}
+		cardContent.WriteString(strings.Join(line2Parts, " ") + "\n")
+
+		// Bead + activity badges (best-effort)
+		if row.CurrentBead != "" {
+			beadID := row.CurrentBead
+			if parts := strings.SplitN(row.CurrentBead, ": ", 2); len(parts) > 0 {
+				beadID = parts[0]
+			}
+			beadBadge := styles.TextBadge(beadID, t.Mauve, t.Base, styles.BadgeOptions{
+				Style:    styles.BadgeStyleCompact,
+				Bold:     false,
+				ShowIcon: false,
+			})
+			cardContent.WriteString(beadBadge + "\n")
+		}
+
+		var activityBadges []string
+		if row.FileChanges > 0 {
+			activityBadges = append(activityBadges, styles.TextBadge(fmt.Sprintf("Δ%d", row.FileChanges), t.Blue, t.Base, styles.BadgeOptions{
+				Style:    styles.BadgeStyleCompact,
+				Bold:     false,
+				ShowIcon: false,
+			}))
+		}
+		if row.TokenVelocity > 0 && showExtendedInfo {
+			activityBadges = append(activityBadges, styles.TokenVelocityBadge(row.TokenVelocity, styles.BadgeOptions{
+				Style:    styles.BadgeStyleCompact,
+				Bold:     false,
+				ShowIcon: true,
+			}))
+		}
+		if len(activityBadges) > 0 {
+			cardContent.WriteString(strings.Join(activityBadges, " ") + "\n")
+		}
 
 		// Size info - on wide displays show more detail
 		sizeStyle := lipgloss.NewStyle().Foreground(t.Subtext)
@@ -2102,14 +2182,14 @@ func (m Model) renderPaneGrid() string {
 		}
 
 		// Command running (if any) - only when there is room
-		if p.Command != "" && m.tier >= layout.TierSplit {
+		if p.Command != "" && showExtendedInfo {
 			cmdStyle := lipgloss.NewStyle().Foreground(t.Overlay).Italic(true)
 			cmd := layout.TruncateRunes(p.Command, maxInt(cardWidth-4, 8), "…")
 			cardContent.WriteString(cmdStyle.Render(cmd))
 		}
 
-		// Context usage bar
-		if ps, ok := m.paneStatus[p.Index]; ok && ps.ContextLimit > 0 && m.tier >= layout.TierWide {
+		// Context usage bar (best-effort; show in grid when available)
+		if ps, ok := m.paneStatus[p.Index]; ok && ps.ContextLimit > 0 {
 			cardContent.WriteString("\n")
 			contextBar := m.renderContextBar(ps.ContextPercent, cardWidth-4)
 			cardContent.WriteString(contextBar)
@@ -2485,6 +2565,9 @@ func (m Model) renderSplitView() string {
 func (m Model) renderUltraLayout() string {
 	t := m.theme
 	leftWidth, centerWidth, rightWidth := layout.UltraProportions(m.width)
+	// The dashboard UI uses a left margin; trim the rightmost panel so the total
+	// rendered width stays within the terminal width at exact thresholds.
+	rightWidth = maxInt(rightWidth-2, 0)
 
 	contentHeight := m.height - 14
 	if contentHeight < 5 {
@@ -2577,6 +2660,46 @@ func (m Model) renderSidebar(width, height int) string {
 		lines = append(lines, m.renderScanBadge())
 	}
 
+	// Metrics (best-effort, height-gated)
+	if m.metricsPanel != nil && height > 0 && (m.metricsError != nil || m.metricsData.TotalTokens > 0 || len(m.metricsData.Agents) > 0) {
+		used := lipgloss.Height(strings.Join(lines, "\n"))
+		spacer := 1
+		panelHeight := height - used - spacer
+		if panelHeight >= m.metricsPanel.Config().MinHeight {
+			if panelHeight > 14 {
+				panelHeight = 14
+			}
+
+			if m.focusedPanel == PanelSidebar {
+				m.metricsPanel.Focus()
+			} else {
+				m.metricsPanel.Blur()
+			}
+			m.metricsPanel.SetSize(width, panelHeight)
+			lines = append(lines, "", m.metricsPanel.View())
+		}
+	}
+
+	// Command history (best-effort, height-gated)
+	if m.historyPanel != nil && height > 0 && (m.historyError != nil || len(m.cmdHistory) > 0) {
+		used := lipgloss.Height(strings.Join(lines, "\n"))
+		spacer := 1
+		panelHeight := height - used - spacer
+		if panelHeight >= m.historyPanel.Config().MinHeight {
+			if panelHeight > 14 {
+				panelHeight = 14
+			}
+
+			if m.focusedPanel == PanelSidebar {
+				m.historyPanel.Focus()
+			} else {
+				m.historyPanel.Blur()
+			}
+			m.historyPanel.SetSize(width, panelHeight)
+			lines = append(lines, "", m.historyPanel.View())
+		}
+	}
+
 	// File activity (best-effort, height-gated)
 	if m.filesPanel != nil && height > 0 && (len(m.fileChanges) > 0 || m.fileChangesError != nil) {
 		used := lipgloss.Height(strings.Join(lines, "\n"))
@@ -2626,6 +2749,14 @@ func (m Model) renderSidebar(width, height int) string {
 func (m Model) renderMegaLayout() string {
 	t := m.theme
 	p1, p2, p3, p4, p5 := layout.MegaProportions(m.width)
+	// The dashboard UI uses a left margin; trim the rightmost panel so the total
+	// rendered width stays within the terminal width at exact thresholds.
+	p5 = maxInt(p5-2, 0)
+	p1Inner := maxInt(p1-4, 0)
+	p2Inner := maxInt(p2-4, 0)
+	p3Inner := maxInt(p3-4, 0)
+	p4Inner := maxInt(p4-4, 0)
+	p5Inner := maxInt(p5-4, 0)
 
 	contentHeight := m.height - 14
 	if contentHeight < 5 {
@@ -2662,35 +2793,35 @@ func (m Model) renderMegaLayout() string {
 		BorderForeground(listBorder).
 		Width(p1).Height(contentHeight).MaxHeight(contentHeight).
 		Padding(0, 1).
-		Render(m.renderPaneList(p1 - 2))
+		Render(m.renderPaneList(p1Inner))
 
 	panel2 := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(detailBorder).
 		Width(p2).Height(contentHeight).MaxHeight(contentHeight).
 		Padding(0, 1).
-		Render(m.renderPaneDetail(p2 - 2))
+		Render(m.renderPaneDetail(p2Inner))
 
 	panel3 := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(beadsBorder).
 		Width(p3).Height(contentHeight).MaxHeight(contentHeight).
 		Padding(0, 1).
-		Render(m.renderBeadsPanel(p3-4, contentHeight-2))
+		Render(m.renderBeadsPanel(p3Inner, contentHeight-2))
 
 	panel4 := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(alertsBorder).
 		Width(p4).Height(contentHeight).MaxHeight(contentHeight).
 		Padding(0, 1).
-		Render(m.renderAlertsPanel(p4-4, contentHeight-2))
+		Render(m.renderAlertsPanel(p4Inner, contentHeight-2))
 
 	panel5 := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(sidebarBorder).
 		Width(p5).Height(contentHeight).MaxHeight(contentHeight).
 		Padding(0, 1).
-		Render(m.renderSidebar(p5-2, contentHeight-2))
+		Render(m.renderSidebar(p5Inner, contentHeight-2))
 
 	return "  " + lipgloss.JoinHorizontal(lipgloss.Top, panel1, panel2, panel3, panel4, panel5)
 }

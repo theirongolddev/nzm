@@ -197,7 +197,11 @@ func (m *HistoryPanel) View() string {
 		}
 
 		// ID
-		id := lipgloss.NewStyle().Foreground(t.Overlay).Render(entry.ID[:4])
+		idText := entry.ID
+		if len(idText) > 4 {
+			idText = idText[:4]
+		}
+		id := lipgloss.NewStyle().Foreground(t.Overlay).Render(idText)
 
 		// Targets
 		targets := "all"

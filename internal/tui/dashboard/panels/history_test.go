@@ -294,6 +294,21 @@ func TestHistoryPanelViewShowsEntries(t *testing.T) {
 	}
 }
 
+func TestHistoryPanelViewShortIDDoesNotPanic(t *testing.T) {
+	panel := NewHistoryPanel()
+	panel.SetSize(80, 20)
+
+	entries := []history.HistoryEntry{
+		{ID: "1", Prompt: "Short ID entry", Targets: []string{"cc_1"}, Success: true},
+	}
+	panel.SetEntries(entries, nil)
+
+	view := panel.View()
+	if !strings.Contains(view, "Short ID entry") {
+		t.Error("expected view to contain entry prompt when ID is short")
+	}
+}
+
 func TestHistoryPanelViewShowsAllTargets(t *testing.T) {
 	panel := NewHistoryPanel()
 	panel.SetSize(100, 20)
