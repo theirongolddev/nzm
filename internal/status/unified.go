@@ -65,7 +65,8 @@ func (d *UnifiedDetector) Detect(paneID string) (AgentStatus, error) {
 
 	// Try to get pane details for agent type detection
 	// We'll parse the pane title from output if needed
-	panes, _ := tmux.GetPanesWithActivity("")
+	// Use paneID as target - tmux list-panes -s -t paneID lists all panes in that pane's session
+	panes, _ := tmux.GetPanesWithActivity(paneID)
 	for _, p := range panes {
 		if p.Pane.ID == paneID {
 			status.PaneName = p.Pane.Title

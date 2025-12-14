@@ -7,8 +7,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/Dicklesworthstone/ntm/internal/cli"
 )
 
 const (
@@ -37,11 +35,11 @@ type UpdateInfo struct {
 // CheckForUpdates queries GitHub for the latest release.
 // Returns update info if a newer version is available.
 // This function is designed to be fast and non-blocking.
-func CheckForUpdates() (*UpdateInfo, error) {
+func CheckForUpdates(currentVersion string) (*UpdateInfo, error) {
 	client := &http.Client{
 		Timeout: CheckTimeout,
 	}
-	return checkForUpdates(client, GitHubAPIURL, cli.Version)
+	return checkForUpdates(client, GitHubAPIURL, currentVersion)
 }
 
 func checkForUpdates(client *http.Client, url, currentVersion string) (*UpdateInfo, error) {
@@ -167,12 +165,12 @@ func compareVersions(v1, v2 string) int {
 // CheckAsync runs the update check in a goroutine and returns immediately.
 // The result can be retrieved from the returned channel.
 // This allows the main program to continue while the check runs in background.
-func CheckAsync() <-chan *UpdateInfo {
+func CheckAsync(currentVersion string) <-chan *UpdateInfo {
 	ch := make(chan *UpdateInfo, 1)
 	go func() {
-		info, err := CheckForUpdates()
+		info, err := CheckForUpdates(currentVersion)
 		if err != nil {
-			ch <- &UpdateInfo{Available: false, CurrentVer: cli.Version}
+			ch <- &UpdateInfo{Available: false, CurrentVer: currentVersion}
 		} else {
 			ch <- info
 		}

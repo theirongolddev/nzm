@@ -222,16 +222,23 @@ func DetectContentType(text string) ContentType {
 	}
 
 	// Check for Markdown indicators
-	if strings.Contains(text, "```") ||
-		strings.Contains(text, "# ") ||
-		strings.Contains(text, "## ") ||
-		strings.Contains(text, "- [") {
+	// Only check first 4KB for efficiency
+	scanLimit := 4096
+	if len(text) < scanLimit {
+		scanLimit = len(text)
+	}
+	head := text[:scanLimit]
+
+	if strings.Contains(head, "```") ||
+		strings.Contains(head, "# ") ||
+		strings.Contains(head, "## ") ||
+		strings.Contains(head, "- [") {
 		return ContentMarkdown
 	}
 
 	// Count code-like characters
 	var codeChars, alphaChars int
-	for _, r := range text {
+	for _, r := range head {
 		if r == '{' || r == '}' || r == '(' || r == ')' || r == ';' || r == '=' {
 			codeChars++
 		}

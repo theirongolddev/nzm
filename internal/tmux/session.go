@@ -410,6 +410,13 @@ func GetPaneTags(paneID string) ([]string, error) {
 // Tags are appended to the title in the format [tag1,tag2,...].
 // This replaces any existing tags on the pane.
 func (c *Client) SetPaneTags(paneID string, tags []string) error {
+	// Validate tags
+	for _, tag := range tags {
+		if strings.ContainsAny(tag, "[]") {
+			return fmt.Errorf("tag %q contains invalid characters '[' or ']'", tag)
+		}
+	}
+
 	title, err := c.GetPaneTitle(paneID)
 	if err != nil {
 		return err

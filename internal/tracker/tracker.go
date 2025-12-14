@@ -540,6 +540,8 @@ type FileChangeStore struct {
 	mu      sync.Mutex
 	limit   int
 	entries []RecordedFileChange
+	cursor  int  // Next write position (oldest element if full)
+	full    bool // Whether the buffer has wrapped around
 }
 
 // NewFileChangeStore creates a store with the provided capacity.
@@ -562,11 +564,17 @@ func (s *FileChangeStore) Add(entry RecordedFileChange) {
 		entry.Timestamp = time.Now()
 	}
 
-	if len(s.entries) >= s.limit {
-		// drop oldest
-		s.entries = s.entries[1:]
+	if s.limit <= 0 {
+		return
 	}
-	s.entries = append(s.entries, entry)
+
+	if len(s.entries) < s.limit {
+		s.entries = append(s.entries, entry)
+	} else {
+		s.full = true
+		s.entries[s.cursor] = entry
+		s.cursor = (s.cursor + 1) % s.limit
+	}
 }
 
 // Since returns changes after the provided timestamp.
@@ -575,7 +583,19 @@ func (s *FileChangeStore) Since(ts time.Time) []RecordedFileChange {
 	defer s.mu.Unlock()
 
 	results := make([]RecordedFileChange, 0)
-	for _, e := range s.entries {
+	count := len(s.entries)
+	if count == 0 {
+		return results
+	}
+
+	start := 0
+	if s.full {
+		start = s.cursor
+	}
+
+	for i := 0; i < count; i++ {
+		idx := (start + i) % count
+		e := s.entries[idx]
 		if e.Timestamp.After(ts) {
 			results = append(results, e)
 		}
@@ -588,8 +608,16 @@ func (s *FileChangeStore) All() []RecordedFileChange {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	results := make([]RecordedFileChange, len(s.entries))
-	copy(results, s.entries)
+	count := len(s.entries)
+	results := make([]RecordedFileChange, count)
+
+	if !s.full {
+		copy(results, s.entries)
+	} else {
+		// Reconstruct order: entries[cursor] is oldest
+		n := copy(results, s.entries[s.cursor:])
+		copy(results[n:], s.entries[:s.cursor])
+	}
 	return results
 }
 

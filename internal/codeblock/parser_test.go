@@ -256,6 +256,9 @@ Line after`
 	if blocks[0].StartLine != 3 {
 		t.Errorf("StartLine = %d, want %d", blocks[0].StartLine, 3)
 	}
+	if blocks[0].EndLine != 6 {
+		t.Errorf("EndLine = %d, want %d", blocks[0].EndLine, 6)
+	}
 }
 
 func TestParseEmptyBlocks(t *testing.T) {

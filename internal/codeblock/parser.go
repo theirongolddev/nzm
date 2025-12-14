@@ -76,7 +76,7 @@ func (p *Parser) Parse(text string) []CodeBlock {
 
 		// Calculate line numbers
 		startLine := countLines(text[:match[0]]) + 1
-		endLine := startLine + countLines(text[match[0]:match[1]]) - 1
+		endLine := startLine + countLines(text[match[0]:match[1]])
 
 		// Try to detect file path
 		filePath, isNew := detectFilePath(content, lang)
@@ -111,25 +111,25 @@ var languageMap = map[string]string{
 	"cs": "csharp", "csharp": "csharp",
 	"rs": "rust", "rust": "rust",
 	"kt": "kotlin", "kotlin": "kotlin",
-	"go": "go",
+	"go":   "go",
 	"java": "java",
-	"php": "php",
+	"php":  "php",
 	"html": "html",
-	"css": "css",
+	"css":  "css",
 	"scss": "scss", "sass": "scss",
 	"less": "less",
-	"sql": "sql",
+	"sql":  "sql",
 	"json": "json",
-	"xml": "xml",
+	"xml":  "xml",
 	"toml": "toml",
-	"lua": "lua",
-	"pl": "perl", "perl": "perl",
-	"r": "r",
+	"lua":  "lua",
+	"pl":   "perl", "perl": "perl",
+	"r":     "r",
 	"swift": "swift",
 	"scala": "scala",
-	"el": "elisp", "lisp": "lisp",
+	"el":    "elisp", "lisp": "lisp",
 	"clj": "clojure",
-	"tf": "terraform",
+	"tf":  "terraform",
 	"vim": "vim",
 }
 
@@ -248,4 +248,84 @@ func ExtractFromText(text string) []CodeBlock {
 // ExtractWithFilter extracts code blocks filtered by language.
 func ExtractWithFilter(text string, languages []string) []CodeBlock {
 	return NewParser().WithLanguageFilter(languages).Parse(text)
+}
+
+// extensionMap maps file extensions to language names
+var extensionMap = map[string]string{
+	".py":         "python",
+	".go":         "go",
+	".js":         "javascript",
+	".jsx":        "javascript",
+	".ts":         "typescript",
+	".tsx":        "typescript",
+	".rs":         "rust",
+	".rb":         "ruby",
+	".java":       "java",
+	".c":          "c",
+	".cpp":        "cpp",
+	".cc":         "cpp",
+	".h":          "c",
+	".hpp":        "cpp",
+	".cs":         "csharp",
+	".swift":      "swift",
+	".kt":         "kotlin",
+	".scala":      "scala",
+	".php":        "php",
+	".sh":         "bash",
+	".bash":       "bash",
+	".zsh":        "bash",
+	".fish":       "fish",
+	".sql":        "sql",
+	".json":       "json",
+	".yaml":       "yaml",
+	".yml":        "yaml",
+	".toml":       "toml",
+	".xml":        "xml",
+	".html":       "html",
+	".css":        "css",
+	".scss":       "scss",
+	".sass":       "sass",
+	".less":       "less",
+	".md":         "markdown",
+	".r":          "r",
+	".R":          "r",
+	".lua":        "lua",
+	".pl":         "perl",
+	".pm":         "perl",
+	".ex":         "elixir",
+	".exs":        "elixir",
+	".erl":        "erlang",
+	".hs":         "haskell",
+	".ml":         "ocaml",
+	".vim":        "vim",
+	".el":         "elisp",
+	".clj":        "clojure",
+	".tf":         "terraform",
+	".vue":        "vue",
+	".svelte":     "svelte",
+	".dockerfile": "dockerfile",
+	".make":       "makefile",
+	".cmake":      "cmake",
+	".proto":      "protobuf",
+	".graphql":    "graphql",
+	".gql":        "graphql",
+}
+
+// DetectLanguage determines the language identifier for a file path.
+func DetectLanguage(path string) string {
+	ext := strings.ToLower(filepath.Ext(path))
+	if lang, ok := extensionMap[ext]; ok {
+		return lang
+	}
+
+	// Check for filenames without extensions
+	base := strings.ToLower(filepath.Base(path))
+	if base == "dockerfile" {
+		return "dockerfile"
+	}
+	if base == "makefile" || base == "gnumakefile" {
+		return "makefile"
+	}
+
+	return "" // No language hint
 }

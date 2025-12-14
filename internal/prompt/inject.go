@@ -5,9 +5,10 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/Dicklesworthstone/ntm/internal/codeblock"
 )
 
 // FileSpec represents a parsed file specification with optional line range
@@ -19,6 +20,9 @@ type FileSpec struct {
 
 // MaxFileSize is the maximum file size allowed for context injection (1MB)
 const MaxFileSize = 1 * 1024 * 1024
+
+// MaxTotalInjectionSize is the maximum total size of injected content (10MB)
+const MaxTotalInjectionSize = 10 * 1024 * 1024
 
 func isLineRangeSuffix(s string) bool {
 	if s == "" {
@@ -119,6 +123,7 @@ func InjectFiles(specs []FileSpec, prompt string) (string, error) {
 	}
 
 	var parts []string
+	totalSize := 0
 
 	for _, spec := range specs {
 		// Check file size first
@@ -130,9 +135,19 @@ func InjectFiles(specs []FileSpec, prompt string) (string, error) {
 			return "", fmt.Errorf("file %s is too large (%d bytes > %d limit)", spec.Path, info.Size(), MaxFileSize)
 		}
 
+		// Enforce global limit (using file size as heuristic to avoid reading if already over)
+		if totalSize+int(info.Size()) > MaxTotalInjectionSize {
+			return "", fmt.Errorf("total injection size exceeds limit (%d bytes)", MaxTotalInjectionSize)
+		}
+
 		content, err := readFileRange(spec)
 		if err != nil {
 			return "", fmt.Errorf("failed to read %s: %w", spec.Path, err)
+		}
+
+		totalSize += len(content)
+		if totalSize > MaxTotalInjectionSize {
+			return "", fmt.Errorf("total injection size exceeds limit (%d bytes)", MaxTotalInjectionSize)
 		}
 
 		// Check for binary content
@@ -140,7 +155,7 @@ func InjectFiles(specs []FileSpec, prompt string) (string, error) {
 			return "", fmt.Errorf("file %s appears to be binary (use text files only)", spec.Path)
 		}
 
-		lang := detectLanguage(spec.Path)
+		lang := codeblock.DetectLanguage(spec.Path)
 		header := fmt.Sprintf("# File: %s", spec.Path)
 		if spec.StartLine > 0 || spec.EndLine > 0 {
 			if spec.EndLine > 0 {
@@ -178,7 +193,7 @@ func readFileRange(spec FileSpec) (string, error) {
 	}
 
 	// Read line range using bufio.Scanner to handle long lines gracefully
-	var lines []string
+	var sb strings.Builder
 	scanner := bufio.NewScanner(f)
 	// Set max token size to MaxFileSize (1MB) to prevent OOM on single huge line
 	buf := make([]byte, 64*1024)
@@ -190,13 +205,18 @@ func readFileRange(spec FileSpec) (string, error) {
 		startLine = 1
 	}
 
+	first := true
 	for scanner.Scan() {
 		lineNum++
 		if lineNum >= startLine {
 			if spec.EndLine > 0 && lineNum > spec.EndLine {
 				break
 			}
-			lines = append(lines, scanner.Text())
+			if !first {
+				sb.WriteString("\n")
+			}
+			sb.WriteString(scanner.Text())
+			first = false
 		}
 	}
 
@@ -204,87 +224,7 @@ func readFileRange(spec FileSpec) (string, error) {
 		return "", fmt.Errorf("scanning file: %w", err)
 	}
 
-	return strings.Join(lines, "\n"), nil
-}
-
-// detectLanguage maps file extensions to markdown language identifiers.
-func detectLanguage(path string) string {
-	ext := strings.ToLower(filepath.Ext(path))
-
-	langMap := map[string]string{
-		".py":         "python",
-		".go":         "go",
-		".js":         "javascript",
-		".jsx":        "javascript",
-		".ts":         "typescript",
-		".tsx":        "typescript",
-		".rs":         "rust",
-		".rb":         "ruby",
-		".java":       "java",
-		".c":          "c",
-		".cpp":        "cpp",
-		".cc":         "cpp",
-		".h":          "c",
-		".hpp":        "cpp",
-		".cs":         "csharp",
-		".swift":      "swift",
-		".kt":         "kotlin",
-		".scala":      "scala",
-		".php":        "php",
-		".sh":         "bash",
-		".bash":       "bash",
-		".zsh":        "bash",
-		".fish":       "fish",
-		".sql":        "sql",
-		".json":       "json",
-		".yaml":       "yaml",
-		".yml":        "yaml",
-		".toml":       "toml",
-		".xml":        "xml",
-		".html":       "html",
-		".css":        "css",
-		".scss":       "scss",
-		".sass":       "sass",
-		".less":       "less",
-		".md":         "markdown",
-		".r":          "r",
-		".R":          "r",
-		".lua":        "lua",
-		".pl":         "perl",
-		".pm":         "perl",
-		".ex":         "elixir",
-		".exs":        "elixir",
-		".erl":        "erlang",
-		".hs":         "haskell",
-		".ml":         "ocaml",
-		".vim":        "vim",
-		".el":         "elisp",
-		".clj":        "clojure",
-		".tf":         "terraform",
-		".vue":        "vue",
-		".svelte":     "svelte",
-		".dockerfile": "dockerfile",
-		".make":       "makefile",
-		".cmake":      "cmake",
-		".proto":      "protobuf",
-		".graphql":    "graphql",
-		".gql":        "graphql",
-	}
-
-	if lang, ok := langMap[ext]; ok {
-		return lang
-	}
-
-	// Check for Dockerfile (no extension)
-	base := strings.ToLower(filepath.Base(path))
-	if base == "dockerfile" {
-		return "dockerfile"
-	}
-	if base == "makefile" || base == "gnumakefile" {
-		return "makefile"
-	}
-
-	return "" // No language hint
+	return sb.String(), nil
 }
 
 // isBinary checks if content appears to be binary (contains null bytes or

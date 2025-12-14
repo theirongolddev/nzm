@@ -56,7 +56,7 @@ func TestChooseBackendWayland(t *testing.T) {
 }
 
 func TestChooseBackendXclip(t *testing.T) {
-	det := newStubDetector("linux", nil, map[string]bool{"xclip": true}, "")
+	det := newStubDetector("linux", map[string]string{"DISPLAY": ":0"}, map[string]bool{"xclip": true}, "")
 	b, err := chooseBackend(det)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -67,7 +67,7 @@ func TestChooseBackendXclip(t *testing.T) {
 }
 
 func TestChooseBackendXselFallback(t *testing.T) {
-	det := newStubDetector("linux", nil, map[string]bool{"xsel": true}, "")
+	det := newStubDetector("linux", map[string]string{"DISPLAY": ":0"}, map[string]bool{"xsel": true}, "")
 	b, err := chooseBackend(det)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

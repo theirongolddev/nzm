@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
@@ -148,28 +149,40 @@ func CheckSession(session string) (*SessionHealth, error) {
 		OverallStatus: StatusOK,
 	}
 
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
 	for _, pa := range panesWithActivity {
-		agentHealth := checkAgent(pa)
-		health.Agents = append(health.Agents, agentHealth)
+		wg.Add(1)
+		go func(pa tmux.PaneActivity) {
+			defer wg.Done()
+			agentHealth := checkAgent(pa)
 
-		// Update summary
-		health.Summary.Total++
-		switch agentHealth.Status {
-		case StatusOK:
-			health.Summary.Healthy++
-		case StatusWarning:
-			health.Summary.Warning++
-		case StatusError:
-			health.Summary.Error++
-		default:
-			health.Summary.Unknown++
-		}
+			mu.Lock()
+			defer mu.Unlock()
 
-		// Update overall status (worst wins)
-		if statusSeverity(agentHealth.Status) > statusSeverity(health.OverallStatus) {
-			health.OverallStatus = agentHealth.Status
-		}
+			health.Agents = append(health.Agents, agentHealth)
+
+			// Update summary
+			health.Summary.Total++
+			switch agentHealth.Status {
+			case StatusOK:
+				health.Summary.Healthy++
+			case StatusWarning:
+				health.Summary.Warning++
+			case StatusError:
+				health.Summary.Error++
+			default:
+				health.Summary.Unknown++
+			}
+
+			// Update overall status (worst wins)
+			if statusSeverity(agentHealth.Status) > statusSeverity(health.OverallStatus) {
+				health.OverallStatus = agentHealth.Status
+			}
+		}(pa)
 	}
+	wg.Wait()
 
 	return health, nil
 }

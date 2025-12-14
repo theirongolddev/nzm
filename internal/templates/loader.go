@@ -75,6 +75,23 @@ func (l *Loader) Load(name string) (*Template, error) {
 func (l *Loader) loadFromDir(dir, name string, source TemplateSource) (*Template, error) {
 	path := filepath.Join(dir, name+".md")
 
+	// Security check: ensure path is inside dir
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		return nil, err
+	}
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return nil, err
+	}
+	rel, err := filepath.Rel(absDir, absPath)
+	if err != nil {
+		return nil, err
+	}
+	if strings.HasPrefix(rel, "..") || strings.HasPrefix(rel, "/") {
+		return nil, fmt.Errorf("template path traversal attempt: %s", name)
+	}
+
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err

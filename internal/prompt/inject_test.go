@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Dicklesworthstone/ntm/internal/codeblock"
 )
 
 func TestParseFileSpec(t *testing.T) {
@@ -63,9 +65,9 @@ func TestDetectLanguage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.path, func(t *testing.T) {
-			got := detectLanguage(tt.path)
+			got := codeblock.DetectLanguage(tt.path)
 			if got != tt.want {
-				t.Errorf("detectLanguage(%q) = %q, want %q", tt.path, got, tt.want)
+				t.Errorf("DetectLanguage(%q) = %q, want %q", tt.path, got, tt.want)
 			}
 		})
 	}

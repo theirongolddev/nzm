@@ -247,6 +247,9 @@ func sendMacOSNotification(title, message string) error {
 
 // sendLinuxNotification sends a notification on Linux using notify-send
 func sendLinuxNotification(title, message string) error {
+	if _, err := exec.LookPath("notify-send"); err != nil {
+		return fmt.Errorf("notify-send not found")
+	}
 	cmd := exec.Command("notify-send", title, message)
 	return cmd.Run()
 }

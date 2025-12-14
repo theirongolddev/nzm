@@ -127,6 +127,17 @@ func LoadFromFile(path string) (*PersonasConfig, error) {
 
 // DefaultUserPath returns the default user personas file path.
 func DefaultUserPath() string {
+	if env := os.Getenv("NTM_CONFIG"); env != "" {
+		dir := filepath.Dir(env)
+		// Expand ~/ in path if present
+		if strings.HasPrefix(dir, "~/") {
+			if home, err := os.UserHomeDir(); err == nil {
+				dir = filepath.Join(home, dir[2:])
+			}
+		}
+		return filepath.Join(dir, "personas.toml")
+	}
+
 	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
 		return filepath.Join(xdg, "ntm", "personas.toml")
 	}

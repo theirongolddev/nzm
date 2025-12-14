@@ -95,12 +95,14 @@ func chooseBackend(det detector) (backend, error) {
 			}
 		}
 
-		// X11 tools
-		if det.lookPath("xclip") == nil {
-			return &xclipBackend{}, nil
-		}
-		if det.lookPath("xsel") == nil {
-			return &xselBackend{}, nil
+		// X11 tools - require DISPLAY
+		if det.getenv("DISPLAY") != "" {
+			if det.lookPath("xclip") == nil {
+				return &xclipBackend{}, nil
+			}
+			if det.lookPath("xsel") == nil {
+				return &xselBackend{}, nil
+			}
 		}
 
 		// As a last resort on Linux, try Wayland if present even without env hint.
