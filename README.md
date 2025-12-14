@@ -655,6 +655,22 @@ Provide a brief status update:
 """
 ```
 
+### Project Config (`.ntm/`)
+
+NTM also supports **project-specific configuration** when you run commands inside a repo that contains a `.ntm/config.toml` (NTM searches upward from your current directory).
+
+Create a scaffold in the current directory:
+
+```bash
+ntm config project init
+ntm config project init --force   # overwrite .ntm/config.toml if it already exists
+```
+
+Project config overrides the global config and is useful for:
+- Default agent counts for `ntm spawn` (when you don’t pass `--cc/--cod/--gmi`)
+- Project palette commands (`[palette].file`, relative to `.ntm/`)
+- Project prompt templates (`[templates].dir`, relative to `.ntm/`)
+
 ### Environment Variables
 
 | Variable | Default | Description |
