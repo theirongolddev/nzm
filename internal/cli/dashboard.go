@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -66,6 +67,13 @@ func runDashboard(w io.Writer, errW io.Writer, session string) error {
 	} else {
 		// Fallback to default if config not loaded
 		projectDir = config.Default().GetProjectDir(session)
+	}
+
+	// Validate project directory exists, warn if not
+	if _, err := os.Stat(projectDir); os.IsNotExist(err) {
+		fmt.Fprintf(errW, "Warning: project directory does not exist: %s\n", projectDir)
+		fmt.Fprintf(errW, "Some features (beads, file tracking) may not work correctly.\n")
+		fmt.Fprintf(errW, "Check your projects_base setting in config: ntm config show\n\n")
 	}
 
 	return dashboard.Run(session, projectDir)

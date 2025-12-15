@@ -21,12 +21,12 @@ import (
 func (m Model) fetchBeadsCmd() tea.Cmd {
 	return func() tea.Msg {
 		if !bv.IsInstalled() {
-			return BeadsUpdateMsg{Err: fmt.Errorf("bv not installed")}
+			// bv not installed - return unavailable summary (not an error)
+			return BeadsUpdateMsg{Summary: bv.BeadsSummary{Available: false, Reason: "bv not installed"}}
 		}
 		summary := bv.GetBeadsSummary(m.projectDir, 5) // Get top 5 ready/in-progress
-		if !summary.Available {
-			return BeadsUpdateMsg{Err: fmt.Errorf("%s", summary.Reason)}
-		}
+		// Return summary regardless of availability - let UI handle gracefully
+		// "No beads" is not an error, just an unavailable state
 		return BeadsUpdateMsg{Summary: *summary, Ready: summary.ReadyPreview}
 	}
 }

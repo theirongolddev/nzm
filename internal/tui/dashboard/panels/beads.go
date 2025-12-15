@@ -137,8 +137,19 @@ func (m *BeadsPanel) View() string {
 		if strings.TrimSpace(m.summary.Reason) == "" {
 			content.WriteString(components.LoadingState("Fetching beads pipeline…", w) + "\n")
 		} else {
-			reason := layout.TruncateRunes(m.summary.Reason, w-6, "…")
-			content.WriteString(components.ErrorState(reason, "Press r to refresh", w) + "\n")
+			// Check if this is a "no beads" case vs an actual error
+			reason := m.summary.Reason
+			isNotInitialized := strings.Contains(reason, "no .beads") ||
+				strings.Contains(reason, "bv not installed") ||
+				strings.Contains(reason, "bd not installed")
+			if isNotInitialized {
+				// Show subtle "not initialized" message instead of error
+				content.WriteString(components.EmptyState("Not initialized (run 'bd init')", w) + "\n")
+			} else {
+				// Actual error - show with refresh hint
+				truncReason := layout.TruncateRunes(reason, w-6, "…")
+				content.WriteString(components.ErrorState(truncReason, "Press r to refresh", w) + "\n")
+			}
 		}
 		return content.String()
 	}
