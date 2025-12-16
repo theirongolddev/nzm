@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { NtmClient } from './ntmClient';
 import { NtmDashboard } from './dashboard';
 import { registerFileDecorations } from './fileDecorations';
+import { registerSessionTreeView } from './sessionTreeView';
 
 export function activate(context: vscode.ExtensionContext) {
 	const client = new NtmClient();
@@ -14,6 +15,9 @@ export function activate(context: vscode.ExtensionContext) {
     // Register file decoration provider for showing lock/reservation status
     const { disposable: fileDecorationDisposable } = registerFileDecorations(context, client);
     context.subscriptions.push(fileDecorationDisposable);
+
+    // Register session tree view in activity bar
+    registerSessionTreeView(context, client);
 
     // Initial check
     client.checkAvailable().then(available => {

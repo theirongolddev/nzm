@@ -16,12 +16,31 @@
   ],
   "activationEvents": [
     "onStartupFinished",
+    "onView:ntmSessions",
     "onCommand:ntm.spawn",
     "onCommand:ntm.showStatus",
     "onCommand:ntm.openPalette"
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "ntm",
+          "title": "NTM",
+          "icon": "$(terminal)"
+        }
+      ]
+    },
+    "views": {
+      "ntm": [
+        {
+          "id": "ntmSessions",
+          "name": "Sessions",
+          "contextualTitle": "NTM Sessions"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "ntm.spawn",
@@ -50,8 +69,34 @@
       {
         "command": "ntm.dashboard",
         "title": "NTM: Open Dashboard"
+      },
+      {
+        "command": "ntm.refreshSessions",
+        "title": "Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "ntm.attachSession",
+        "title": "Attach to Session",
+        "icon": "$(terminal)"
       }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "ntm.refreshSessions",
+          "when": "view == ntmSessions",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "ntm.attachSession",
+          "when": "view == ntmSessions && viewItem == session",
+          "group": "inline"
+        }
+      ]
+    },
     "configuration": {
       "title": "NTM",
       "properties": {
