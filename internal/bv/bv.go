@@ -4,6 +4,7 @@ package bv
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,6 +21,9 @@ var ErrNotInstalled = errors.New("bv is not installed")
 
 // ErrNoBaseline indicates no baseline exists for drift checking
 var ErrNoBaseline = errors.New("no baseline found")
+
+// DefaultTimeout is the default timeout for external command execution
+const DefaultTimeout = 30 * time.Second
 
 var bdForceNoDB atomic.Bool
 
@@ -44,7 +48,10 @@ func run(dir string, args ...string) (string, error) {
 		}
 	}
 
-	cmd := exec.Command("bv", args...)
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "bv", args...)
 	cmd.Dir = dir
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -56,6 +63,9 @@ func run(dir string, args ...string) (string, error) {
 		stderrStr := stderr.String()
 		if strings.Contains(stderrStr, "No baseline found") {
 			return "", ErrNoBaseline
+		}
+		if ctx.Err() == context.DeadlineExceeded {
+			return "", fmt.Errorf("bv timed out after %v", DefaultTimeout)
 		}
 		return "", fmt.Errorf("bv %s: %w: %s", strings.Join(args, " "), err, stderrStr)
 	}
@@ -162,7 +172,10 @@ func CheckDrift(dir string) DriftResult {
 		}
 	}
 
-	cmd := exec.Command("bv", "-check-drift")
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "bv", "-check-drift")
 	cmd.Dir = dir
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -184,6 +197,13 @@ func CheckDrift(dir string) DriftResult {
 		message := strings.TrimSpace(stdout.String())
 		if message == "" {
 			message = strings.TrimSpace(stderr.String())
+		}
+
+		if ctx.Err() == context.DeadlineExceeded {
+			return DriftResult{
+				Status:  DriftNoBaseline,
+				Message: "timeout checking drift",
+			}
 		}
 
 		switch code {
@@ -608,7 +628,10 @@ func RunBd(dir string, args ...string) (string, error) {
 		}
 	}
 
-	cmd := exec.Command("bd", args...)
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "bd", args...)
 	cmd.Dir = dir
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -616,6 +639,10 @@ func RunBd(dir string, args ...string) (string, error) {
 
 	err := cmd.Run()
 	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return "", fmt.Errorf("bd timed out after %v", DefaultTimeout)
+		}
+
 		stderrStr := stderr.String()
 		if !bdForceNoDB.Load() && !containsString(args, "--no-db") && isNoBeadsDBError(stderrStr) {
 			bdForceNoDB.Store(true)
