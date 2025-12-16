@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -129,17 +130,21 @@ func runAnalytics(days int, since, format string, showSessions bool) error {
 	return outputStats(stats, format, showSessions)
 }
 
-// readEvents reads and filters events from the JSONL file.
+// readEvents reads and filters events from the JSONL file using streaming.
 func readEvents(path string, cutoff time.Time) ([]events.Event, error) {
-	data, err := os.ReadFile(path)
+	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
+	defer f.Close()
 
 	var result []events.Event
-	lines := splitLines(data)
+	scanner := bufio.NewScanner(f)
+	// Set a reasonable buffer limit for lines (e.g., 1MB per event line)
+	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
 
-	for _, line := range lines {
+	for scanner.Scan() {
+		line := scanner.Bytes()
 		if len(line) == 0 {
 			continue
 		}
@@ -154,23 +159,11 @@ func readEvents(path string, cutoff time.Time) ([]events.Event, error) {
 		}
 	}
 
-	return result, nil
-}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
 
-// splitLines splits data into lines without allocating new strings.
-func splitLines(data []byte) [][]byte {
-	var lines [][]byte
-	start := 0
-	for i, b := range data {
-		if b == '\n' {
-			lines = append(lines, data[start:i])
-			start = i + 1
-		}
-	}
-	if start < len(data) {
-		lines = append(lines, data[start:])
-	}
-	return lines
+	return result, nil
 }
 
 // aggregateStats computes statistics from event list.

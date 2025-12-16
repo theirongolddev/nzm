@@ -54,27 +54,34 @@ func MergeConfig(global *Config, project *ProjectConfig, projectDir string) *Con
 
 	// Merge Palette File
 	if project.Palette.File != "" {
-		// Try .ntm/ first (legacy/convention)
-		palettePath := filepath.Join(projectDir, ".ntm", project.Palette.File)
-		if _, err := os.Stat(palettePath); os.IsNotExist(err) {
-			// Try relative to project root
-			palettePath = filepath.Join(projectDir, project.Palette.File)
-		}
-
-		if cmds, err := LoadPaletteFromMarkdown(palettePath); err == nil && len(cmds) > 0 {
-			// Prepend project commands so they take precedence
-			allCmds := append(cmds, global.Palette...)
-
-			// Deduplicate by key
-			seen := make(map[string]bool)
-			unique := make([]PaletteCmd, 0, len(allCmds))
-			for _, cmd := range allCmds {
-				if !seen[cmd.Key] {
-					seen[cmd.Key] = true
-					unique = append(unique, cmd)
-				}
+		// Prevent traversal
+		cleanFile := filepath.Clean(project.Palette.File)
+		if strings.Contains(cleanFile, "..") || strings.HasPrefix(cleanFile, string(filepath.Separator)) {
+			// Don't error, just ignore unsafe path
+			fmt.Printf("Warning: ignoring unsafe project palette path: %s\n", project.Palette.File)
+		} else {
+			// Try .ntm/ first (legacy/convention)
+			palettePath := filepath.Join(projectDir, ".ntm", cleanFile)
+			if _, err := os.Stat(palettePath); os.IsNotExist(err) {
+				// Try relative to project root
+				palettePath = filepath.Join(projectDir, cleanFile)
 			}
-			global.Palette = unique
+
+			if cmds, err := LoadPaletteFromMarkdown(palettePath); err == nil && len(cmds) > 0 {
+				// Prepend project commands so they take precedence
+				allCmds := append(cmds, global.Palette...)
+
+				// Deduplicate by key
+				seen := make(map[string]bool)
+				unique := make([]PaletteCmd, 0, len(allCmds))
+				for _, cmd := range allCmds {
+					if !seen[cmd.Key] {
+						seen[cmd.Key] = true
+						unique = append(unique, cmd)
+					}
+				}
+				global.Palette = unique
+			}
 		}
 	}
 

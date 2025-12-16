@@ -148,7 +148,8 @@ export class NtmClient {
             if (targets.includes('gmi')) args.push('--gmi');
         }
 
-        args.push(prompt);
+        // Use -- to separate flags from positional arguments (the prompt)
+        args.push('--', prompt);
         await this.run(args);
     }
     

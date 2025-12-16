@@ -30,6 +30,7 @@ type Span struct {
 	Tags      Tags          `json:"tags,omitempty"`
 	children  []*Span
 	ended     bool
+	tracked   bool // true if this span is being tracked by the global profiler
 }
 
 // Tags are key-value annotations on spans
@@ -87,6 +88,7 @@ func StartWithPhase(name, phase string) *Span {
 		Phase:     phase,
 		StartTime: time.Now(),
 		Tags:      make(Tags),
+		tracked:   true,
 	}
 	global.spans = append(global.spans, span)
 	return span
@@ -107,6 +109,7 @@ func StartChild(parent *Span, name string) *Span {
 		Parent:    parent.Name,
 		StartTime: time.Now(),
 		Tags:      make(Tags),
+		tracked:   true,
 	}
 	parent.children = append(parent.children, span)
 	global.spans = append(global.spans, span)
@@ -115,6 +118,10 @@ func StartChild(parent *Span, name string) *Span {
 
 // End finishes the span and records duration
 func (s *Span) End() {
+	if !s.tracked {
+		return
+	}
+
 	global.mu.Lock()
 	defer global.mu.Unlock()
 
@@ -128,6 +135,10 @@ func (s *Span) End() {
 
 // Tag adds a tag to the span
 func (s *Span) Tag(key string, value interface{}) *Span {
+	if !s.tracked {
+		return s
+	}
+
 	global.mu.Lock()
 	defer global.mu.Unlock()
 	if s.Tags == nil {

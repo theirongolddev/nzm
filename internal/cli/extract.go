@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -295,7 +296,15 @@ blockLoop:
 			action = "create"
 		}
 
+		// Check for risky paths
+		cleanPath := filepath.Clean(block.FilePath)
+		isRisky := filepath.IsAbs(cleanPath) || strings.HasPrefix(cleanPath, "..") || strings.Contains(cleanPath, "/..")
+
 		fmt.Printf("[%d] %s %s (%s)\n", i+1, action, block.FilePath, langDisplay)
+
+		if isRisky {
+			fmt.Printf("    %s Warning: path escapes current directory\n", "\033[33m⚠\033[0m")
+		}
 
 		// Check if file exists
 		_, err := os.Stat(block.FilePath)

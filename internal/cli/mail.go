@@ -16,6 +16,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Dicklesworthstone/ntm/internal/agentmail"
+	"github.com/Dicklesworthstone/ntm/internal/status"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
 )
 
@@ -288,9 +289,17 @@ func runMailInbox(cmd *cobra.Command, client mailInboxClient, session string, se
 		if strings.EqualFold(m.Importance, "urgent") || strings.EqualFold(m.Importance, "high") {
 			prefix = "[URGENT] "
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "%s%s\n", prefix, m.Subject)
-		if m.From != "" || len(m.Recipients) > 0 {
-			fmt.Fprintf(cmd.OutOrStdout(), "%s → %s\n", m.From, strings.Join(m.Recipients, ", "))
+		// Sanitize output to prevent escape sequence injection
+		subject := status.StripANSI(m.Subject)
+		from := status.StripANSI(m.From)
+		var recipients []string
+		for _, r := range m.Recipients {
+			recipients = append(recipients, status.StripANSI(r))
+		}
+
+		fmt.Fprintf(cmd.OutOrStdout(), "%s%s\n", prefix, subject)
+		if from != "" || len(recipients) > 0 {
+			fmt.Fprintf(cmd.OutOrStdout(), "%s → %s\n", from, strings.Join(recipients, ", "))
 		}
 	}
 	return nil

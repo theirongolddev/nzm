@@ -55,6 +55,15 @@ func runInit(shell string) error {
 	return nil
 }
 
+// quoteAlias quotes a string for use in a shell alias (single quotes).
+func quoteAlias(s string) string {
+	if s == "" {
+		return "''"
+	}
+	// Replace single quotes with '\''
+	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
+}
+
 func generateZsh(cfg *config.Config) string {
 	var b strings.Builder
 
@@ -65,9 +74,9 @@ func generateZsh(cfg *config.Config) string {
 
 	// Agent aliases
 	b.WriteString("# Agent aliases\n")
-	b.WriteString(fmt.Sprintf("alias cc=%q\n", cfg.Agents.Claude))
-	b.WriteString(fmt.Sprintf("alias cod=%q\n", cfg.Agents.Codex))
-	b.WriteString(fmt.Sprintf("alias gmi=%q\n", cfg.Agents.Gemini))
+	b.WriteString(fmt.Sprintf("alias cc=%s\n", quoteAlias(cfg.Agents.Claude)))
+	b.WriteString(fmt.Sprintf("alias cod=%s\n", quoteAlias(cfg.Agents.Codex)))
+	b.WriteString(fmt.Sprintf("alias gmi=%s\n", quoteAlias(cfg.Agents.Gemini)))
 	b.WriteString("\n")
 
 	// Command aliases
@@ -183,9 +192,9 @@ func generateBash(cfg *config.Config) string {
 
 	// Agent aliases
 	b.WriteString("# Agent aliases\n")
-	b.WriteString(fmt.Sprintf("alias cc=%q\n", cfg.Agents.Claude))
-	b.WriteString(fmt.Sprintf("alias cod=%q\n", cfg.Agents.Codex))
-	b.WriteString(fmt.Sprintf("alias gmi=%q\n", cfg.Agents.Gemini))
+	b.WriteString(fmt.Sprintf("alias cc=%s\n", quoteAlias(cfg.Agents.Claude)))
+	b.WriteString(fmt.Sprintf("alias cod=%s\n", quoteAlias(cfg.Agents.Codex)))
+	b.WriteString(fmt.Sprintf("alias gmi=%s\n", quoteAlias(cfg.Agents.Gemini)))
 	b.WriteString("\n")
 
 	// Command aliases
@@ -256,9 +265,9 @@ func generateFish(cfg *config.Config) string {
 
 	// Agent aliases
 	b.WriteString("# Agent aliases\n")
-	b.WriteString(fmt.Sprintf("alias cc %q\n", cfg.Agents.Claude))
-	b.WriteString(fmt.Sprintf("alias cod %q\n", cfg.Agents.Codex))
-	b.WriteString(fmt.Sprintf("alias gmi %q\n", cfg.Agents.Gemini))
+	b.WriteString(fmt.Sprintf("alias cc %s\n", quoteAlias(cfg.Agents.Claude)))
+	b.WriteString(fmt.Sprintf("alias cod %s\n", quoteAlias(cfg.Agents.Codex)))
+	b.WriteString(fmt.Sprintf("alias gmi %s\n", quoteAlias(cfg.Agents.Gemini)))
 	b.WriteString("\n")
 
 	// Command abbreviations

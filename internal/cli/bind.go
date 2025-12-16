@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -33,6 +34,13 @@ Examples:
   ntm bind --show       # Show current binding
   ntm bind --unbind     # Remove the binding`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// Validate key to prevent injection
+			// Allowed: alphanumeric, -, ^ (for Ctrl)
+			validKey := regexp.MustCompile(`^[a-zA-Z0-9\-\^]+$`)
+			if !validKey.MatchString(key) {
+				return fmt.Errorf("invalid key format: %q (allowed: a-z, 0-9, -, ^)", key)
+			}
+
 			if showOnly {
 				return showBinding(key)
 			}
