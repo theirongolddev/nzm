@@ -54,12 +54,7 @@ func Append(entry *HistoryEntry) error {
 
 	path := StoragePath()
 
-	// Ensure directory exists (again, but cheap)
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return err
-	}
-
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return err
 	}
@@ -94,7 +89,7 @@ func BatchAppend(entries []*HistoryEntry) error {
 		return err
 	}
 
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return err
 	}
@@ -379,7 +374,7 @@ func Prune(keep int) (int, error) {
 		return 0, err
 	}
 
-	if err := os.Chmod(tmpFile.Name(), 0644); err != nil {
+	if err := os.Chmod(tmpFile.Name(), 0600); err != nil {
 		return 0, err
 	}
 
@@ -446,7 +441,7 @@ func PruneByTime(cutoff time.Time) (int, error) {
 		return 0, err
 	}
 
-	if err := os.Chmod(tmpFile.Name(), 0644); err != nil {
+	if err := os.Chmod(tmpFile.Name(), 0600); err != nil {
 		return 0, err
 	}
 

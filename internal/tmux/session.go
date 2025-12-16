@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // paneNameRegex matches the NTM pane naming convention:
@@ -575,6 +576,14 @@ func (c *Client) SendKeys(target, keys string, enter bool) error {
 				for end > start && (keys[end]&0xC0 == 0x80) {
 					end--
 				}
+			}
+
+			// Safety: if end == start after backing up, we must advance to include
+			// at least one complete UTF-8 character to avoid an infinite loop.
+			// This can happen if chunkSize is smaller than a UTF-8 character (max 4 bytes).
+			if end == start && start < len(keys) {
+				_, size := utf8.DecodeRuneInString(keys[start:])
+				end = start + size
 			}
 
 			chunk := keys[start:end]

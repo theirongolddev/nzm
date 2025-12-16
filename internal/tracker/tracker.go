@@ -374,11 +374,19 @@ type SnapshotOptions struct {
 	IgnoreGitIgnored bool
 }
 
-// DefaultSnapshotOptions provides conservative defaults (skip .git).
+// DefaultSnapshotOptions provides conservative defaults (skip .git and common huge dirs).
 func DefaultSnapshotOptions(root string) SnapshotOptions {
 	return SnapshotOptions{
-		IgnoreHidden:     false,
-		IgnorePaths:      []string{root + "/.git"},
+		IgnoreHidden: false,
+		IgnorePaths: []string{
+			filepath.Join(root, ".git"),
+			filepath.Join(root, "node_modules"),
+			filepath.Join(root, "__pycache__"),
+			filepath.Join(root, ".venv"),
+			filepath.Join(root, "target"),
+			filepath.Join(root, "dist"),
+			filepath.Join(root, "build"),
+		},
 		IgnoreGitIgnored: true,
 	}
 }

@@ -257,7 +257,7 @@ func (s *Storage) SaveScrollback(sessionName, checkpointID string, paneID string
 	filename := fmt.Sprintf("pane_%s.txt", sanitizeName(paneID))
 	fullPath := filepath.Join(panesDir, filename)
 
-	if err := os.WriteFile(fullPath, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(fullPath, []byte(content), 0600); err != nil {
 		return "", fmt.Errorf("saving scrollback: %w", err)
 	}
 
@@ -284,7 +284,7 @@ func (s *Storage) SaveGitPatch(sessionName, checkpointID, patch string) error {
 	}
 	dir := s.CheckpointDir(sessionName, checkpointID)
 	path := filepath.Join(dir, GitPatchFile)
-	return os.WriteFile(path, []byte(patch), 0644)
+	return os.WriteFile(path, []byte(patch), 0600)
 }
 
 // LoadGitPatch reads the git diff patch from the checkpoint.
@@ -307,7 +307,7 @@ func (s *Storage) LoadGitPatch(sessionName, checkpointID string) (string, error)
 func (s *Storage) SaveGitStatus(sessionName, checkpointID, status string) error {
 	dir := s.CheckpointDir(sessionName, checkpointID)
 	path := filepath.Join(dir, GitStatusFile)
-	return os.WriteFile(path, []byte(status), 0644)
+	return os.WriteFile(path, []byte(status), 0600)
 }
 
 // writeJSON writes data as formatted JSON to a file atomically.
@@ -332,7 +332,7 @@ func writeJSON(path string, data interface{}) error {
 		return fmt.Errorf("closing temp file: %w", err)
 	}
 
-	if err := os.Chmod(tmpFile.Name(), 0644); err != nil {
+	if err := os.Chmod(tmpFile.Name(), 0600); err != nil {
 		return fmt.Errorf("chmod temp file: %w", err)
 	}
 

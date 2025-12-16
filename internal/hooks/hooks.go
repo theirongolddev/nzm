@@ -256,7 +256,7 @@ elif [ $UBS_EXIT -ne 0 ]; then
 fi
 
 exit 0
-`, repoRoot, quoteShell(ntmPath))
+`, safeRepoRoot, quoteShell(ntmPath))
 }
 
 // quoteShell quotes a string for safe use in a shell script.
