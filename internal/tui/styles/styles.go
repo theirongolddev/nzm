@@ -46,10 +46,26 @@ type Color struct {
 
 // ParseHex converts a hex color string to Color
 func ParseHex(hex string) Color {
-	var r, g, b int
-	if len(hex) == 7 && hex[0] == '#' {
-		fmt.Sscanf(hex, "#%02x%02x%02x", &r, &g, &b)
+	if len(hex) != 7 || hex[0] != '#' {
+		return Color{}
 	}
+
+	hexToByte := func(b byte) int {
+		switch {
+		case b >= '0' && b <= '9':
+			return int(b - '0')
+		case b >= 'a' && b <= 'f':
+			return int(b - 'a' + 10)
+		case b >= 'A' && b <= 'F':
+			return int(b - 'A' + 10)
+		}
+		return 0
+	}
+
+	r := hexToByte(hex[1])<<4 | hexToByte(hex[2])
+	g := hexToByte(hex[3])<<4 | hexToByte(hex[4])
+	b := hexToByte(hex[5])<<4 | hexToByte(hex[6])
+
 	return Color{R: r, G: g, B: b}
 }
 

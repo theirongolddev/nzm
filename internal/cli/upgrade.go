@@ -371,63 +371,68 @@ func extractTarGz(archivePath, destDir string) (string, error) {
 	return binaryPath, nil
 }
 
-// replaceBinary replaces the current binary with a new one
+// replaceBinary replaces the current binary with a new one atomically
 func replaceBinary(newBinaryPath, currentBinaryPath string) error {
-	// Make the new binary executable
-	if err := os.Chmod(newBinaryPath, 0755); err != nil {
-		return fmt.Errorf("failed to set permissions: %w", err)
+	// Create a temporary file in the same directory as the target
+	// This ensures we can atomically rename it later (same filesystem)
+	dstDir := filepath.Dir(currentBinaryPath)
+	tmpDstName := filepath.Base(currentBinaryPath) + ".new"
+	tmpDstPath := filepath.Join(dstDir, tmpDstName)
+
+	// Clean up any previous failed attempt
+	os.Remove(tmpDstPath)
+
+	// Copy new binary to the temporary destination
+	srcFile, err := os.Open(newBinaryPath)
+	if err != nil {
+		return fmt.Errorf("failed to open new binary: %w", err)
+	}
+	defer srcFile.Close()
+
+	dstFile, err := os.OpenFile(tmpDstPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
+	if err != nil {
+		return fmt.Errorf("failed to create temp binary: %w", err)
+	}
+	// Ensure we close and remove if something fails before the rename
+	defer func() {
+		dstFile.Close()
+		// Only remove if it still exists (rename moves it)
+		if _, err := os.Stat(tmpDstPath); err == nil {
+			os.Remove(tmpDstPath)
+		}
+	}()
+
+	if _, err := io.Copy(dstFile, srcFile); err != nil {
+		return fmt.Errorf("failed to copy binary: %w", err)
 	}
 
-	// On Unix, we can atomically rename over the running binary
-	// The old binary stays in memory until the process exits
+	// Ensure data is flushed to disk
+	if err := dstFile.Sync(); err != nil {
+		return fmt.Errorf("failed to sync binary: %w", err)
+	}
+	dstFile.Close()
 
-	// First, try to backup the current binary
-	backupPath := currentBinaryPath + ".backup"
-	_ = os.Remove(backupPath) // Remove any existing backup
+	// Rename the current binary to .old (backup) to allow rollback if needed,
+	// and also to work around Windows locking issues if running.
+	// On Unix we can rename over it directly, but Windows prevents it if running.
+	// Common strategy: Rename old -> old.bak, Rename new -> old.
+	backupPath := currentBinaryPath + ".old"
+	os.Remove(backupPath) // Remove ancient backup
 
-	// Rename current to backup
 	if err := os.Rename(currentBinaryPath, backupPath); err != nil {
 		return fmt.Errorf("failed to backup current binary: %w", err)
 	}
 
-	// Copy new binary to the target location
-	// (We copy instead of rename because they might be on different filesystems)
-	newFile, err := os.Open(newBinaryPath)
-	if err != nil {
-		// Restore backup
+	// Rename the new binary to the target path
+	if err := os.Rename(tmpDstPath, currentBinaryPath); err != nil {
+		// Try to restore backup
 		os.Rename(backupPath, currentBinaryPath)
-		return fmt.Errorf("failed to open new binary: %w", err)
-	}
-	defer newFile.Close()
-
-	destFile, err := os.OpenFile(currentBinaryPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
-	if err != nil {
-		// Restore backup
-		os.Rename(backupPath, currentBinaryPath)
-		return fmt.Errorf("failed to create destination: %w", err)
+		return fmt.Errorf("failed to install new binary: %w", err)
 	}
 
-	if _, err := io.Copy(destFile, newFile); err != nil {
-		destFile.Close()
-		// Restore backup
-		os.Remove(currentBinaryPath)
-		os.Rename(backupPath, currentBinaryPath)
-		return fmt.Errorf("failed to copy binary: %w", err)
-	}
-
-	// Close file before setting permissions (ensure data is flushed)
-	if err := destFile.Close(); err != nil {
-		os.Remove(currentBinaryPath)
-		os.Rename(backupPath, currentBinaryPath)
-		return fmt.Errorf("failed to finalize binary: %w", err)
-	}
-
-	// Set executable permissions
-	if err := os.Chmod(currentBinaryPath, 0755); err != nil {
-		return fmt.Errorf("failed to set executable permissions: %w", err)
-	}
-
-	// Remove backup on success
+	// Success! Remove backup (or leave it? Usually nice to clean up)
+	// We'll leave it for manual recovery in extreme cases, or remove it?
+	// Let's remove it to keep clean.
 	os.Remove(backupPath)
 
 	return nil

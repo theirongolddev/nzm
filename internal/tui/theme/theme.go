@@ -3,6 +3,7 @@ package theme
 import (
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
@@ -330,23 +331,37 @@ var detectDarkBackground = func() bool {
 	return output.HasDarkBackground()
 }
 
+var (
+	cachedAutoTheme Theme
+	autoThemeOnce   sync.Once
+)
+
+// resetAutoTheme resets the cached auto theme for testing purposes.
+// This allows tests to re-run auto detection with different mock detectors.
+var resetAutoTheme = func() {
+	autoThemeOnce = sync.Once{}
+	cachedAutoTheme = Theme{}
+}
+
 func autoTheme() (result Theme) {
-	// Default to dark theme (Mocha) - safer for most terminals
-	result = CatppuccinMocha
+	autoThemeOnce.Do(func() {
+		// Default to dark theme (Mocha) - safer for most terminals
+		cachedAutoTheme = CatppuccinMocha
 
-	defer func() {
-		if recover() != nil {
-			// If detection panics, fall back to dark theme
-			result = CatppuccinMocha
+		defer func() {
+			if recover() != nil {
+				// If detection panics, fall back to dark theme
+				cachedAutoTheme = CatppuccinMocha
+			}
+		}()
+
+		if detectDarkBackground() {
+			cachedAutoTheme = CatppuccinMocha
+		} else {
+			cachedAutoTheme = CatppuccinLatte
 		}
-	}()
-
-	if detectDarkBackground() {
-		result = CatppuccinMocha
-	} else {
-		result = CatppuccinLatte
-	}
-	return
+	})
+	return cachedAutoTheme
 }
 
 // Styles contains pre-built lipgloss styles for the theme

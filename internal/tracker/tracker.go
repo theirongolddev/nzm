@@ -3,6 +3,7 @@
 package tracker
 
 import (
+	"bufio"
 	"bytes"
 	"io/fs"
 	"os/exec"
@@ -459,28 +460,64 @@ func SnapshotDirectory(root string, opts SnapshotOptions) (map[string]FileState,
 func gitCheckIgnored(root string, entries []fileEntry) (map[string]bool, error) {
 	result := make(map[string]bool)
 
-	var buf bytes.Buffer
-	for _, e := range entries {
-		buf.WriteString(e.path)
-		buf.WriteByte(0) // Null terminator for -z
-	}
-
 	cmd := exec.Command("git", "-C", root, "check-ignore", "-z", "--stdin")
-	cmd.Stdin = &buf
-	out, err := cmd.Output()
+	
+	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return result, err
 	}
 
-	// Split by null byte
-	parts := bytes.Split(out, []byte{0})
-	for _, part := range parts {
-		if len(part) == 0 {
-			continue
-		}
-		result[string(part)] = true
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return result, err
 	}
+
+	if err := cmd.Start(); err != nil {
+		return result, err
+	}
+
+	// Write paths to stdin in background
+	go func() {
+		defer stdin.Close()
+		for _, e := range entries {
+			// Ignore errors here - if pipe closes, cmd has likely exited
+			_, _ = stdin.Write([]byte(e.path))
+			_, _ = stdin.Write([]byte{0}) // Null terminator for -z
+		}
+	}()
+
+	// Read output incrementally
+	scanner := bufio.NewScanner(stdout)
+	scanner.Split(scanNullTerminated)
+
+	for scanner.Scan() {
+		text := scanner.Text()
+		if text != "" {
+			result[text] = true
+		}
+	}
+
+	// Wait for command to finish
+	_ = cmd.Wait()
+
 	return result, nil
+}
+
+// scanNullTerminated is a split function for bufio.Scanner that splits on null bytes.
+func scanNullTerminated(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	if atEOF && len(data) == 0 {
+		return 0, nil, nil
+	}
+	if i := bytes.IndexByte(data, 0); i >= 0 {
+		// We have a full null-terminated token.
+		return i + 1, data[0:i], nil
+	}
+	// If we're at EOF, we have a final, non-terminated token. Return it.
+	if atEOF {
+		return len(data), data, nil
+	}
+	// Request more data.
+	return 0, nil, nil
 }
 
 // DetectFileChanges compares two snapshots and returns the delta.

@@ -5,8 +5,11 @@ import "testing"
 func withDetector(t *testing.T, detector func() bool) {
 	original := detectDarkBackground
 	detectDarkBackground = detector
+	// Reset the cached auto theme so it re-detects with the new detector
+	resetAutoTheme()
 	t.Cleanup(func() {
 		detectDarkBackground = original
+		resetAutoTheme()
 	})
 }
 

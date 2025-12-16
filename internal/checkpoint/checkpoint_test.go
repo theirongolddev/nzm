@@ -19,12 +19,12 @@ func TestGenerateID(t *testing.T) {
 		{
 			name:    "simple name",
 			input:   "backup",
-			wantLen: 26, // YYYYMMDD-HHMMSS.mmm-backup (includes milliseconds)
+			wantLen: 31, // YYYYMMDD-HHMMSS.mmm-XXXX-backup (with random suffix)
 		},
 		{
 			name:    "empty name",
 			input:   "",
-			wantLen: 19, // YYYYMMDD-HHMMSS.mmm (includes milliseconds)
+			wantLen: 24, // YYYYMMDD-HHMMSS.mmm-XXXX (with random suffix)
 		},
 		{
 			name:     "name with spaces",
