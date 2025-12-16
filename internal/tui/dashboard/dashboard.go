@@ -1262,6 +1262,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 
+				// Find the pane to get the variant
+				var currentPane tmux.Pane
+				found := false
+				for _, p := range m.panes {
+					if p.ID == data.PaneID {
+						currentPane = p
+						found = true
+						break
+					}
+				}
+
 				// Map type string to model name for context limits
 				agentType := "unknown"
 				modelName := ""
@@ -1275,6 +1286,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				case string(tmux.AgentGemini):
 					agentType = "gemini"
 					modelName = "gemini" // Default Gemini
+				}
+
+				// Use variant if available
+				if found && currentPane.Variant != "" {
+					modelName = currentPane.Variant
 				}
 
 				// Get or create pane status
@@ -1997,7 +2013,7 @@ func (m Model) renderContextBar(percent float64, width int) string {
 		barWidth = 5
 	}
 
-	colors := []string{string(t.Green), string(t.Yellow), string(t.Red)}
+	colors := []string{string(t.Green), string(t.Blue), string(t.Yellow), string(t.Red)}
 	barContent := styles.ShimmerProgressBar(percent/100.0, barWidth, "█", "░", m.animTick, colors...)
 
 	percentStyle := lipgloss.NewStyle().Foreground(t.Overlay)

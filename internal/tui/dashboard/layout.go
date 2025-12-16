@@ -228,7 +228,7 @@ func RenderMiniBar(value float64, width int, t theme.Theme) string {
 // RenderContextMiniBar renders context usage with warning indicator
 // When context is >80%, warning indicators shimmer to draw attention
 func RenderContextMiniBar(percent float64, width int, tick int, t theme.Theme) string {
-	bar := styles.ShimmerProgressBar(percent/100, width-4, "█", "░", tick, string(t.Green), string(t.Yellow), string(t.Red))
+	bar := styles.ShimmerProgressBar(percent/100, width-4, "█", "░", tick, string(t.Green), string(t.Blue), string(t.Yellow), string(t.Red))
 
 	// Add warning icon for high usage with shimmer effect
 	var suffix string
