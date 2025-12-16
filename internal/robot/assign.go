@@ -326,20 +326,26 @@ func calculateConfidence(agentType string, bead bv.BeadPreview, strategy string)
 func inferTaskType(bead bv.BeadPreview) string {
 	title := strings.ToLower(bead.Title)
 
-	// Check for common keywords
-	keywords := map[string][]string{
-		"bug":           {"bug", "fix", "broken", "error", "crash"},
-		"feature":       {"feature", "implement", "add", "new"},
-		"refactor":      {"refactor", "cleanup", "improve", "consolidate"},
-		"documentation": {"doc", "readme", "comment", "documentation"},
-		"testing":       {"test", "spec", "coverage"},
-		"analysis":      {"analyze", "investigate", "research", "design"},
+	// Check for common keywords in priority order
+	// Order matters! Check specific types before generic ones.
+	type rule struct {
+		typ string
+		kws []string
 	}
 
-	for taskType, kws := range keywords {
-		for _, kw := range kws {
+	rules := []rule{
+		{"bug", []string{"bug", "fix", "broken", "error", "crash"}},
+		{"testing", []string{"test", "spec", "coverage"}},
+		{"documentation", []string{"doc", "readme", "comment", "documentation"}},
+		{"refactor", []string{"refactor", "cleanup", "improve", "consolidate"}},
+		{"analysis", []string{"analyze", "investigate", "research", "design"}},
+		{"feature", []string{"feature", "implement", "add", "new"}},
+	}
+
+	for _, r := range rules {
+		for _, kw := range r.kws {
 			if strings.Contains(title, kw) {
-				return taskType
+				return r.typ
 			}
 		}
 	}

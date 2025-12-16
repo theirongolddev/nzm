@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Dicklesworthstone/ntm/internal/agentmail"
+	"github.com/Dicklesworthstone/ntm/internal/util"
 )
 
 func newLockCmd() *cobra.Command {
@@ -61,9 +62,9 @@ type LockResult struct {
 }
 
 func runLock(session string, patterns []string, reason, ttlStr string, shared bool) error {
-	ttlDuration, err := time.ParseDuration(ttlStr)
+	ttlDuration, err := util.ParseDuration(ttlStr)
 	if err != nil {
-		return fmt.Errorf("invalid TTL format '%s': use format like 30m, 1h", ttlStr)
+		return fmt.Errorf("invalid TTL format '%s': use format like 30m, 1h, 1d", ttlStr)
 	}
 	ttlSeconds := int(ttlDuration.Seconds())
 	if ttlSeconds < 60 {
