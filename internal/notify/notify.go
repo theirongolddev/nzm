@@ -95,7 +95,7 @@ func DefaultConfig() Config {
 		Webhook: WebhookConfig{
 			Enabled:  false,
 			Method:   "POST",
-			Template: `{"text": "NTM: {{.Type}} - {{.Message}}"}`,
+			Template: `{"text": "NTM: {{.Type}} - {{jsonEscape .Message}}"}`,
 		},
 		Shell: ShellConfig{
 			Enabled:  false,
@@ -254,16 +254,31 @@ func sendLinuxNotification(title, message string) error {
 	return cmd.Run()
 }
 
+// jsonEscape escapes a string for safe embedding in JSON.
+// This is needed when using text/template to generate JSON.
+func jsonEscape(s string) string {
+	b, err := json.Marshal(s)
+	if err != nil {
+		return ""
+	}
+	// json.Marshal wraps in quotes, remove them for template use
+	return string(b[1 : len(b)-1])
+}
+
 // sendWebhook sends a webhook notification
 func (n *Notifier) sendWebhook(event Event) error {
-	// Parse and execute template
+	// Parse and execute template with JSON escape function
 	tmplStr := n.config.Webhook.Template
 	if tmplStr == "" {
-		// Default JSON template
-		tmplStr = `{"event":"{{.Type}}","message":"{{.Message}}","session":"{{.Session}}","timestamp":"{{.Timestamp}}"}`
+		// Default JSON template using jsonEscape for user-controlled fields
+		tmplStr = `{"event":"{{.Type}}","message":"{{jsonEscape .Message}}","session":"{{jsonEscape .Session}}","timestamp":"{{.Timestamp}}"}`
 	}
 
-	tmpl, err := template.New("webhook").Parse(tmplStr)
+	funcMap := template.FuncMap{
+		"jsonEscape": jsonEscape,
+	}
+
+	tmpl, err := template.New("webhook").Funcs(funcMap).Parse(tmplStr)
 	if err != nil {
 		return fmt.Errorf("invalid template: %w", err)
 	}

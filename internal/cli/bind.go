@@ -193,7 +193,7 @@ func removeBinding(key string) error {
 		return nil
 	}
 
-	if err := os.WriteFile(tmuxConf, []byte(strings.Join(newLines, "\n")), 0644); err != nil {
+	if err := os.WriteFile(tmuxConf, []byte(strings.Join(newLines, "\n")), 0600); err != nil {
 		return fmt.Errorf("failed to update tmux.conf: %w", err)
 	}
 
