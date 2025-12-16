@@ -12,7 +12,6 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
-	"github.com/Dicklesworthstone/ntm/internal/agentmail"
 	"github.com/Dicklesworthstone/ntm/internal/output"
 	"github.com/Dicklesworthstone/ntm/internal/status"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
@@ -599,14 +598,14 @@ func runStatus(w io.Writer, session string, tags []string) error {
 // updateSessionActivity updates the Agent Mail activity for a session.
 // This is non-blocking and silently ignores errors.
 func updateSessionActivity(sessionName string) {
-	client := agentmail.NewClient()
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
 	projectKey := ""
 	if cfg != nil {
 		projectKey = cfg.GetProjectDir(sessionName)
 	}
+
+	client := newAgentMailClient(projectKey)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
 
 	_ = client.UpdateSessionActivity(ctx, sessionName, projectKey)
 }
@@ -614,7 +613,7 @@ func updateSessionActivity(sessionName string) {
 // fetchAgentMailStatus retrieves Agent Mail status for display in ntm status.
 // Returns nil if Agent Mail is unavailable (graceful degradation).
 func fetchAgentMailStatus(projectKey string) *output.AgentMailStatus {
-	client := agentmail.NewClient(agentmail.WithProjectKey(projectKey))
+	client := newAgentMailClient(projectKey)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 

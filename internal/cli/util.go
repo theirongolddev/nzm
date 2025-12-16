@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	"github.com/mattn/go-isatty"
@@ -269,7 +268,11 @@ func SanitizeFilename(name string) string {
 // ResolveCassContext queries CASS for relevant past sessions based on a query string
 // and returns a formatted markdown summary.
 func ResolveCassContext(query, dir string) (string, error) {
-	client := cass.NewClient()
+	var opts []cass.ClientOption
+	if cfg != nil && cfg.CASS.BinaryPath != "" {
+		opts = append(opts, cass.WithBinaryPath(cfg.CASS.BinaryPath))
+	}
+	client := cass.NewClient(opts...)
 	if !client.IsInstalled() {
 		return "", fmt.Errorf("cass not installed")
 	}
@@ -304,7 +307,7 @@ func ResolveCassContext(query, dir string) (string, error) {
 	for _, hit := range resp.Hits {
 		ts := ""
 		if hit.CreatedAt != nil {
-			ts = time.Unix(*hit.CreatedAt, 0).Format("2006-01-02")
+			ts = hit.CreatedAt.Time.Format("2006-01-02")
 		}
 		sb.WriteString(fmt.Sprintf("- **%s** (%s, %s)\n", hit.Title, hit.Agent, ts))
 		if hit.Snippet != "" {

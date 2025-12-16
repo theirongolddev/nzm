@@ -73,7 +73,7 @@ func runUnlock(session string, patterns []string, all bool) error {
 		return fmt.Errorf("session '%s' has no Agent Mail identity", session)
 	}
 
-	client := agentmail.NewClient(agentmail.WithProjectKey(wd))
+	client := newAgentMailClient(wd)
 	if !client.IsAvailable() {
 		if IsJSONOutput() {
 			result := UnlockResult{Success: false, Session: session, Agent: sessionAgent.AgentName, Error: "Agent Mail server unavailable"}

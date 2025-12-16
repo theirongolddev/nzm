@@ -454,7 +454,7 @@ func runGitStatus(session string, allAgents bool) error {
 
 	// Get Agent Mail status
 	result.AgentMail = &AgentMailStatus{}
-	client := agentmail.NewClient(agentmail.WithProjectKey(workDir))
+	client := newAgentMailClient(workDir)
 
 	if client.IsAvailable() {
 		result.AgentMail.Available = true

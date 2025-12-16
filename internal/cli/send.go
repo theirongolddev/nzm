@@ -1083,7 +1083,11 @@ func boolToStr(b bool) string {
 }
 
 func checkCassDuplicates(session, prompt string, threshold float64, days int) error {
-	client := cass.NewClient()
+	var opts []cass.ClientOption
+	if cfg != nil && cfg.CASS.BinaryPath != "" {
+		opts = append(opts, cass.WithBinaryPath(cfg.CASS.BinaryPath))
+	}
+	client := cass.NewClient(opts...)
 	if !client.IsInstalled() {
 		return fmt.Errorf("cass not installed")
 	}

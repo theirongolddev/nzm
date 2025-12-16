@@ -64,7 +64,7 @@ func runLocks(session string, allAgents bool) error {
 		agentName = sessionAgent.AgentName
 	}
 
-	client := agentmail.NewClient(agentmail.WithProjectKey(wd))
+	client := newAgentMailClient(wd)
 	if !client.IsAvailable() {
 		if IsJSONOutput() {
 			result := LocksResult{Success: false, Session: session, Agent: agentName, ProjectKey: wd, Error: "Agent Mail server unavailable"}

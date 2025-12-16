@@ -22,7 +22,6 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/config"
 	"github.com/Dicklesworthstone/ntm/internal/recipe"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
-	"github.com/Dicklesworthstone/ntm/internal/tokens"
 	"github.com/Dicklesworthstone/ntm/internal/tracker"
 )
 
@@ -37,11 +36,11 @@ type CASSStatusOutput struct {
 
 // CASSIndexStats holds index statistics
 type CASSIndexStats struct {
-	Exists        bool   `json:"exists"`
-	Fresh         bool   `json:"fresh"`
-	LastIndexedAt string `json:"last_indexed_at"` // RFC3339 timestamp
-	Conversations int64  `json:"conversations"`
-	Messages      int64  `json:"messages"`
+	Exists        bool  `json:"exists"`
+	Fresh         bool  `json:"fresh"`
+	LastIndexedAt int64 `json:"last_indexed_at"`
+	Conversations int64 `json:"conversations"`
+	Messages      int64 `json:"messages"`
 }
 
 // PrintCASSStatus outputs CASS health and stats as JSON
@@ -59,7 +58,7 @@ func PrintCASSStatus() error {
 		output.Healthy = status.Healthy
 		output.Index.Exists = true
 		output.Index.Fresh = status.Index.Healthy
-		output.Index.LastIndexedAt = FormatTimestamp(status.LastIndexedAt)
+		output.Index.LastIndexedAt = status.LastIndexedAt.Time.UnixMilli()
 		output.Index.Conversations = status.Conversations
 		output.Index.Messages = status.Messages
 	}
@@ -82,7 +81,7 @@ type CASSSearchHit struct {
 	Title      string  `json:"title"`
 	Score      float64 `json:"score"`
 	Snippet    string  `json:"snippet"`
-	CreatedAt  string  `json:"created_at"` // RFC3339 timestamp
+	CreatedAt  int64   `json:"created_at"`
 }
 
 // PrintCASSSearch outputs search results as JSON
@@ -108,9 +107,9 @@ func PrintCASSSearch(query, agent, workspace, since string, limit int) error {
 	}
 
 	for i, hit := range resp.Hits {
-		createdAt := ""
+		createdAt := int64(0)
 		if hit.CreatedAt != nil {
-			createdAt = FormatUnixSeconds(*hit.CreatedAt)
+			createdAt = hit.CreatedAt.Time.UnixMilli() // Convert to ms
 		}
 		output.Hits[i] = CASSSearchHit{
 			SourcePath: hit.SourcePath,
@@ -216,7 +215,7 @@ func PrintCASSContext(query string) error {
 	for _, hit := range resp.Hits {
 		when := "unknown"
 		if hit.CreatedAt != nil {
-			ts := time.Unix(*hit.CreatedAt, 0)
+			ts := hit.CreatedAt.Time
 			when = ts.Format("2006-01-02")
 		}
 
@@ -490,13 +489,6 @@ func PrintStatus() error {
 		return encodeJSON(output)
 	}
 
-	// Optimization: Fetch all panes in one go to avoid N+1 tmux calls
-	allPanes, err := tmux.GetAllPanes()
-	if err != nil {
-		// Fallback or just empty panes if this fails (e.g. race condition)
-		allPanes = make(map[string][]tmux.Pane)
-	}
-
 	for _, sess := range sessions {
 		info := SessionInfo{
 			Name:     sess.Name,
@@ -505,7 +497,9 @@ func PrintStatus() error {
 			Windows:  sess.Windows,
 		}
 
-		if panes, ok := allPanes[sess.Name]; ok {
+		// Try to get agents from panes
+		panes, err := tmux.GetPanes(sess.Name)
+		if err == nil {
 			info.Panes = len(panes)
 			for _, pane := range panes {
 				agent := Agent{
@@ -562,6 +556,10 @@ func PrintStatus() error {
 	if summary := getAgentMailSummary(); summary != nil {
 		output.AgentMail = summary
 	}
+
+	// Include recent file changes (best-effort, bounded).
+	appendFileChanges(&output)
+	appendConflicts(&output)
 
 	return encodeJSON(output)
 }
@@ -1311,13 +1309,51 @@ func getBlockersForIssue(issueID string) []string {
 }
 
 func detectAgentType(title string) string {
-	if detection := DetectFromNTMTitle(title); detection.Type != "unknown" {
-		return detection.Type
+	// Try to detect from pane title
+	switch {
+	case contains(title, "claude"):
+		return "claude"
+	case contains(title, "codex"):
+		return "codex"
+	case contains(title, "gemini"):
+		return "gemini"
+	case contains(title, "cursor"):
+		return "cursor"
+	case contains(title, "windsurf"):
+		return "windsurf"
+	case contains(title, "aider"):
+		return "aider"
+	default:
+		return "unknown"
 	}
-	if detection := DetectFromTitle(title); detection.Type != "unknown" {
-		return detection.Type
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr ||
+		len(s) > 0 && containsLower(s, substr))
+}
+
+func containsLower(s, substr string) bool {
+	s = toLower(s)
+	substr = toLower(substr)
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
 	}
-	return "unknown"
+	return false
+}
+
+func toLower(s string) string {
+	b := make([]byte, len(s))
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c >= 'A' && c <= 'Z' {
+			c += 'a' - 'A'
+		}
+		b[i] = c
+	}
+	return string(b)
 }
 
 func encodeJSON(v interface{}) error {
@@ -1348,53 +1384,6 @@ type PaneOutput struct {
 	State     string   `json:"state"` // active, idle, unknown
 	Lines     []string `json:"lines"`
 	Truncated bool     `json:"truncated"`
-}
-
-// ContextOutput is the structured output for --robot-context
-type ContextOutput struct {
-	RobotResponse
-	Session    string               `json:"session"`
-	CapturedAt time.Time            `json:"captured_at"`
-	Agents     []AgentContextInfo   `json:"agents"`
-	Summary    ContextSummary       `json:"summary"`
-	Warnings   []ContextWarning     `json:"warnings,omitempty"`
-	AgentHints *ContextAgentHints   `json:"_agent_hints,omitempty"`
-}
-
-// AgentContextInfo contains context usage info for a single agent
-type AgentContextInfo struct {
-	Pane            string  `json:"pane"`
-	PaneIdx         int     `json:"pane_idx"`
-	AgentType       string  `json:"agent_type"`          // claude, codex, gemini
-	Model           string  `json:"model"`               // Detected or configured model
-	EstimatedTokens int     `json:"estimated_tokens"`    // Visible tokens (estimated)
-	WithOverhead    int     `json:"with_overhead"`       // Including hidden context (2.5x multiplier)
-	ContextLimit    int     `json:"context_limit"`       // Model's max context
-	UsagePercent    float64 `json:"usage_percent"`       // Percentage used (with overhead)
-	UsageLevel      string  `json:"usage_level"`         // Low, Medium, High, Critical
-	Confidence      string  `json:"confidence"`          // Always "low" - we're estimating
-	State           string  `json:"state"`               // active, idle, unknown
-}
-
-// ContextSummary provides aggregate context stats
-type ContextSummary struct {
-	TotalAgents    int     `json:"total_agents"`
-	HighUsageCount int     `json:"high_usage_count"` // Agents above 80%
-	AvgUsage       float64 `json:"avg_usage_percent"`
-}
-
-// ContextWarning represents a context usage warning
-type ContextWarning struct {
-	Pane           string `json:"pane"`
-	Message        string `json:"message"`
-	Recommendation string `json:"recommendation"`
-}
-
-// ContextAgentHints provides actionable suggestions for AI agents
-type ContextAgentHints struct {
-	LowUsageAgents    []string `json:"low_usage_agents,omitempty"`    // Panes with plenty of context room
-	HighUsageAgents   []string `json:"high_usage_agents,omitempty"`   // Panes approaching limit
-	Suggestions       []string `json:"suggestions,omitempty"`         // Actionable hints
 }
 
 // PrintTail outputs recent pane output for AI consumption
@@ -1514,202 +1503,6 @@ func generateTailHints(panes map[string]PaneOutput) *TailAgentHints {
 		IdleAgents:   idle,
 		ActiveAgents: active,
 		Suggestions:  suggestions,
-	}
-}
-
-// PrintContext outputs context window usage for all agents in a session.
-// This helps AI agents understand how much context capacity remains.
-func PrintContext(session string, scrollbackLines int) error {
-	if !tmux.SessionExists(session) {
-		return RobotError(
-			fmt.Errorf("session '%s' not found", session),
-			ErrCodeSessionNotFound,
-			"Use 'ntm list' to see available sessions",
-		)
-	}
-
-	panes, err := tmux.GetPanes(session)
-	if err != nil {
-		return RobotError(
-			fmt.Errorf("failed to get panes: %w", err),
-			ErrCodeInternalError,
-			"Check tmux is running and session is accessible",
-		)
-	}
-
-	output := ContextOutput{
-		RobotResponse: NewRobotResponse(true),
-		Session:       session,
-		CapturedAt:    time.Now().UTC(),
-		Agents:        make([]AgentContextInfo, 0, len(panes)),
-		Warnings:      make([]ContextWarning, 0),
-	}
-
-	var totalUsage float64
-	var highUsageCount int
-	var lowUsageAgents, highUsageAgents []string
-
-	for _, pane := range panes {
-		// Capture pane scrollback
-		scrollback, err := tmux.CapturePaneOutput(pane.ID, scrollbackLines)
-		if err != nil {
-			continue // Skip panes we can't capture
-		}
-
-		// Strip ANSI codes for accurate estimation
-		cleanText := stripANSI(scrollback)
-
-		// Detect agent type and model
-		agentType := detectAgentType(pane.Title)
-		model := detectModel(agentType, pane.Title)
-
-		// Estimate tokens
-		visibleTokens := tokens.SmartEstimate(cleanText)
-		withOverhead := tokens.EstimateWithOverhead(cleanText, 2.5) // 2.5x overhead multiplier
-		contextLimit := tokens.GetContextLimit(model)
-		usagePercent := float64(withOverhead) * 100.0 / float64(contextLimit)
-
-		// Determine usage level
-		usageLevel := getUsageLevel(usagePercent)
-
-		// Detect agent state
-		lines := splitLines(cleanText)
-		state := detectState(lines, pane.Title)
-
-		paneKey := fmt.Sprintf("%d", pane.Index)
-
-		agentInfo := AgentContextInfo{
-			Pane:            paneKey,
-			PaneIdx:         pane.Index,
-			AgentType:       agentType,
-			Model:           model,
-			EstimatedTokens: visibleTokens,
-			WithOverhead:    withOverhead,
-			ContextLimit:    contextLimit,
-			UsagePercent:    usagePercent,
-			UsageLevel:      usageLevel,
-			Confidence:      "low", // Always low - we're estimating
-			State:           state,
-		}
-		output.Agents = append(output.Agents, agentInfo)
-
-		// Track stats
-		totalUsage += usagePercent
-		if usagePercent >= 80 {
-			highUsageCount++
-			highUsageAgents = append(highUsageAgents, paneKey)
-			output.Warnings = append(output.Warnings, ContextWarning{
-				Pane:           paneKey,
-				Message:        fmt.Sprintf("Context at %.0f%%, approaching limit", usagePercent),
-				Recommendation: "Consider compaction or starting fresh",
-			})
-		} else if usagePercent < 40 {
-			lowUsageAgents = append(lowUsageAgents, paneKey)
-		}
-	}
-
-	// Sort pane lists for deterministic output
-	sort.Strings(lowUsageAgents)
-	sort.Strings(highUsageAgents)
-
-	// Calculate summary
-	agentCount := len(output.Agents)
-	avgUsage := 0.0
-	if agentCount > 0 {
-		avgUsage = totalUsage / float64(agentCount)
-	}
-
-	output.Summary = ContextSummary{
-		TotalAgents:    agentCount,
-		HighUsageCount: highUsageCount,
-		AvgUsage:       avgUsage,
-	}
-
-	// Generate agent hints
-	output.AgentHints = generateContextHints(lowUsageAgents, highUsageAgents, highUsageCount, agentCount)
-
-	return encodeJSON(output)
-}
-
-// getUsageLevel returns a qualitative level for context usage percentage
-func getUsageLevel(pct float64) string {
-	switch {
-	case pct < 40:
-		return "Low"
-	case pct < 70:
-		return "Medium"
-	case pct < 85:
-		return "High"
-	default:
-		return "Critical"
-	}
-}
-
-// detectModel attempts to determine the model from agent type and pane title
-func detectModel(agentType, title string) string {
-	title = strings.ToLower(title)
-
-	// Check for model hints in the title
-	modelHints := map[string]string{
-		"opus":    "opus",
-		"sonnet":  "sonnet",
-		"haiku":   "haiku",
-		"gpt4":    "gpt4",
-		"gpt-4":   "gpt4",
-		"o1":      "o1",
-		"gemini":  "gemini",
-		"pro":     "pro",
-		"flash":   "flash",
-	}
-
-	for hint, model := range modelHints {
-		if strings.Contains(title, hint) {
-			return model
-		}
-	}
-
-	// Fall back to defaults by agent type
-	switch agentType {
-	case "claude":
-		return "sonnet" // Default Claude model
-	case "codex":
-		return "gpt4" // Default OpenAI model
-	case "gemini":
-		return "gemini" // Default Google model
-	default:
-		return "unknown"
-	}
-}
-
-// generateContextHints creates actionable hints based on context analysis
-func generateContextHints(lowUsage, highUsage []string, highCount, total int) *ContextAgentHints {
-	var suggestions []string
-
-	if highCount > 0 {
-		if highCount == total {
-			suggestions = append(suggestions, "All agents approaching context limit - consider starting fresh sessions")
-		} else {
-			suggestions = append(suggestions, fmt.Sprintf("%d of %d agents above 80%% - consider compacting or reassigning work", highCount, total))
-		}
-	}
-
-	if len(lowUsage) > 0 && highCount > 0 {
-		suggestions = append(suggestions, fmt.Sprintf("%d agents have plenty of context room - consider moving work there", len(lowUsage)))
-	}
-
-	if len(lowUsage) == total && total > 0 {
-		suggestions = append(suggestions, "All agents have ample context room - system healthy")
-	}
-
-	// Return nil if no useful hints
-	if len(lowUsage) == 0 && len(highUsage) == 0 && len(suggestions) == 0 {
-		return nil
-	}
-
-	return &ContextAgentHints{
-		LowUsageAgents:  lowUsage,
-		HighUsageAgents: highUsage,
-		Suggestions:     suggestions,
 	}
 }
 
@@ -2166,39 +1959,6 @@ func agentTypeString(t tmux.AgentType) string {
 	}
 }
 
-// ResolveAgentType normalizes any agent type string to its canonical form.
-// Accepts various aliases and returns the standardized name.
-//
-// Canonical forms: claude, codex, gemini, cursor, windsurf, aider, user, unknown
-//
-// Examples:
-//   - "cc", "claude", "claude_code", "claude-code" -> "claude"
-//   - "cod", "codex", "codex_cli", "codex-cli"    -> "codex"
-//   - "gmi", "gemini", "gemini_cli", "gemini-cli" -> "gemini"
-func ResolveAgentType(input string) string {
-	normalized := strings.ToLower(strings.TrimSpace(input))
-	normalized = strings.ReplaceAll(normalized, "-", "_")
-
-	switch normalized {
-	case "cc", "claude", "claude_code":
-		return "claude"
-	case "cod", "codex", "codex_cli":
-		return "codex"
-	case "gmi", "gemini", "gemini_cli":
-		return "gemini"
-	case "cursor":
-		return "cursor"
-	case "windsurf":
-		return "windsurf"
-	case "aider":
-		return "aider"
-	case "user":
-		return "user"
-	default:
-		return normalized // Unknown types passed through
-	}
-}
-
 // SendOutput is the structured output for --robot-send
 type SendOutput struct {
 	RobotResponse                   // Embed standard response fields (success, timestamp, error)
@@ -2209,8 +1969,6 @@ type SendOutput struct {
 	Failed         []SendError      `json:"failed"`
 	MessagePreview string           `json:"message_preview"`
 	AgentHints     *SendAgentHints  `json:"_agent_hints,omitempty"`
-	DryRun         bool             `json:"dry_run,omitempty"`
-	WouldSendTo    []string         `json:"would_send_to,omitempty"`
 }
 
 // SendAgentHints provides agent guidance specific to send output
@@ -2234,7 +1992,6 @@ type SendOptions struct {
 	AgentTypes []string // Filter by agent types (e.g., "claude", "codex")
 	Exclude    []string // Panes to exclude
 	DelayMs    int      // Delay between sends in milliseconds
-	DryRun     bool     // Preview mode: show what would happen without executing
 }
 
 // PrintSend sends a message to multiple panes atomically and returns structured results
@@ -2299,10 +2056,10 @@ func PrintSend(opts SendOptions) error {
 	}
 	hasPaneFilter := len(paneFilterMap) > 0
 
-	// Build agent type filter map (resolves aliases to canonical form)
+	// Build agent type filter map
 	typeFilterMap := make(map[string]bool)
 	for _, t := range opts.AgentTypes {
-		typeFilterMap[ResolveAgentType(t)] = true
+		typeFilterMap[strings.ToLower(t)] = true
 	}
 	hasTypeFilter := len(typeFilterMap) > 0
 
@@ -2348,14 +2105,6 @@ func PrintSend(opts SendOptions) error {
 
 		targetPanes = append(targetPanes, pane)
 		output.Targets = append(output.Targets, paneKey)
-	}
-
-	// Dry-run mode: show what would happen without executing
-	if opts.DryRun {
-		output.DryRun = true
-		output.WouldSendTo = output.Targets
-		output.Success = true
-		return encodeJSON(output)
 	}
 
 	// Send to all targets
@@ -2903,7 +2652,7 @@ func getBeadNeighbors(dir, issueID, direction string) ([]string, []bdDepTreeNode
 		return nil, nil, fmt.Errorf("invalid direction %q", direction)
 	}
 
-	out, err := bv.RunBd(dir, "dep", "tree", "--direction="+direction, "--max-depth=1", "--json", "--", issueID)
+	out, err := bv.RunBd(dir, "dep", "tree", issueID, "--direction="+direction, "--max-depth=1", "--json")
 	if err != nil {
 		return nil, nil, fmt.Errorf("bd dep tree: %w", err)
 	}

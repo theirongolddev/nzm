@@ -383,7 +383,7 @@ func runHooksGuardInstall(warnOnly bool) error {
 		return err
 	}
 
-	client := agentmail.NewClient(agentmail.WithProjectKey(repoPath))
+	client := newAgentMailClient(repoPath)
 	if !client.IsAvailable() {
 		return fmt.Errorf("agent mail server not available at %s\nstart the server with: mcp-agent-mail serve", agentmail.DefaultBaseURL)
 	}
@@ -434,7 +434,7 @@ func runHooksGuardUninstall() error {
 		return err
 	}
 
-	client := agentmail.NewClient(agentmail.WithProjectKey(repoPath))
+	client := newAgentMailClient(repoPath)
 	if !client.IsAvailable() {
 		return fmt.Errorf("agent mail server not available at %s\nstart the server with: mcp-agent-mail serve", agentmail.DefaultBaseURL)
 	}

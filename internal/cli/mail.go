@@ -161,6 +161,20 @@ func newMailInboxCmdReal() *cobra.Command {
 	return cmd
 }
 
+func newAgentMailClient(projectKey string) *agentmail.Client {
+	var opts []agentmail.Option
+	opts = append(opts, agentmail.WithProjectKey(projectKey))
+	if cfg != nil {
+		if cfg.AgentMail.URL != "" {
+			opts = append(opts, agentmail.WithBaseURL(cfg.AgentMail.URL))
+		}
+		if cfg.AgentMail.Token != "" {
+			opts = append(opts, agentmail.WithToken(cfg.AgentMail.Token))
+		}
+	}
+	return agentmail.NewClient(opts...)
+}
+
 // runMailInbox aggregates messages across agents and writes to cmd output.
 func runMailInbox(cmd *cobra.Command, client mailInboxClient, session string, sessionAgents bool, agentFilter string, urgent bool, limit int, jsonFmt bool) error {
 	projectKey, err := os.Getwd()
@@ -169,7 +183,7 @@ func runMailInbox(cmd *cobra.Command, client mailInboxClient, session string, se
 	}
 
 	if client == nil {
-		client = agentmail.NewClient(agentmail.WithProjectKey(projectKey))
+		client = newAgentMailClient(projectKey)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -397,7 +411,7 @@ func runMailMark(cmd *cobra.Command, session, agent string, action mailAction, i
 		return fmt.Errorf("getting working directory: %w", err)
 	}
 
-	client := agentmail.NewClient(agentmail.WithProjectKey(projectKey))
+	client := newAgentMailClient(projectKey)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -512,7 +526,7 @@ func runMailSendOverseer(cmd *cobra.Command, session string, to []string, subjec
 	}
 
 	// Create Agent Mail client
-	client := agentmail.NewClient(agentmail.WithProjectKey(projectKey))
+	client := newAgentMailClient(projectKey)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 

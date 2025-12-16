@@ -757,7 +757,16 @@ func spawnSessionLogic(opts SpawnOptions) error {
 // registerSessionAgent registers the session with Agent Mail.
 // This is non-blocking and logs but does not fail if unavailable.
 func registerSessionAgent(sessionName, workingDir string) {
-	client := agentmail.NewClient()
+	var opts []agentmail.Option
+	if cfg != nil {
+		if cfg.AgentMail.URL != "" {
+			opts = append(opts, agentmail.WithBaseURL(cfg.AgentMail.URL))
+		}
+		if cfg.AgentMail.Token != "" {
+			opts = append(opts, agentmail.WithToken(cfg.AgentMail.Token))
+		}
+	}
+	client := agentmail.NewClient(opts...)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 

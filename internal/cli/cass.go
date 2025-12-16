@@ -57,12 +57,22 @@ func newCassStatusCmd() *cobra.Command {
 	}
 }
 
+func newCassClient() *cass.Client {
+	var opts []cass.ClientOption
+	if cfg != nil && cfg.CASS.BinaryPath != "" {
+		opts = append(opts, cass.WithBinaryPath(cfg.CASS.BinaryPath))
+	}
+	return cass.NewClient(opts...)
+}
+
 func runCassStatus() error {
-	client := cass.NewClient()
+	client := newCassClient()
 	status, err := client.Status(context.Background())
 	if err != nil {
 		return handleCassError(err)
 	}
+// ... rest of function unchanged
+
 
 	if IsJSONOutput() {
 		return output.PrintJSON(status)
@@ -80,7 +90,7 @@ func runCassStatus() error {
 	fmt.Printf("  Healthy:        %s\n", healthyMark)
 	fmt.Printf("  Conversations:  %d\n", status.Conversations)
 	fmt.Printf("  Messages:       %d\n", status.Messages)
-	fmt.Printf("  Last Indexed:   %s\n", formatAge(status.LastIndexedAt))
+	fmt.Printf("  Last Indexed:   %s\n", formatAge(status.LastIndexedAt.Time))
 	fmt.Printf("  Index Size:     %.1f MB\n", status.Index.SizeMB())
 	if status.Pending.HasPending() {
 		fmt.Printf("  Pending:        %d sessions, %d files\n", status.Pending.Sessions, status.Pending.Files)
@@ -117,7 +127,7 @@ func newCassSearchCmd() *cobra.Command {
 }
 
 func runCassSearch(query, agent, workspace, since string, limit, offset int) error {
-	client := cass.NewClient()
+	client := newCassClient()
 	resp, err := client.Search(context.Background(), cass.SearchOptions{
 		Query:     query,
 		Agent:     agent,
@@ -167,7 +177,7 @@ func newCassInsightsCmd() *cobra.Command {
 }
 
 func runCassInsights(since string) error {
-	client := cass.NewClient()
+	client := newCassClient()
 	resp, err := client.Search(context.Background(), cass.SearchOptions{
 		Query: "*",
 		Since: since,
@@ -235,7 +245,7 @@ func newCassTimelineCmd() *cobra.Command {
 }
 
 func runCassTimeline(since, groupBy string) error {
-	client := cass.NewClient()
+	client := newCassClient()
 	resp, err := client.Timeline(context.Background(), since, groupBy)
 	if err != nil {
 		return handleCassError(err)

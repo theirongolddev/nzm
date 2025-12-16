@@ -138,7 +138,7 @@ func runDeps(verbose bool) error {
 	}
 
 	// Add Agent Mail as a service check
-	client := agentmail.NewClient()
+	client := newAgentMailClient("")
 	agentMailAvailable := client.IsAvailable()
 	depResults = append(depResults, output.DependencyCheck{
 		Name:      "Agent Mail",
@@ -245,7 +245,7 @@ func runDeps(verbose bool) error {
 
 // checkAgentMail checks Agent Mail server availability
 func checkAgentMail(t theme.Theme, verbose bool) {
-	client := agentmail.NewClient()
+	client := newAgentMailClient("")
 
 	if client.IsAvailable() {
 		fmt.Printf("  %s✓%s %-15s", colorize(t.Success), "\033[0m", "Agent Mail")
