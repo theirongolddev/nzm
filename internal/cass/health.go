@@ -86,9 +86,9 @@ func (c *Client) NeedsReindex(ctx context.Context) (bool, string) {
 	}
 
 	if !status.Index.LastUpdated.IsZero() {
-		if time.Since(status.Index.LastUpdated) > 24*time.Hour {
+		if time.Since(status.Index.LastUpdated.Time) > 24*time.Hour {
 			return true, fmt.Sprintf("Index stale (last updated %s)",
-				time.Since(status.Index.LastUpdated).Round(time.Minute))
+				time.Since(status.Index.LastUpdated.Time).Round(time.Minute))
 		}
 	}
 

@@ -8,11 +8,11 @@ import (
 
 func TestSearchHitCreatedAtTime(t *testing.T) {
 	ts := int64(1702200000)
-	hit := SearchHit{CreatedAt: &ts}
+	tm := time.Unix(ts, 0)
+	hit := SearchHit{CreatedAt: &FlexTime{Time: tm}}
 	got := hit.CreatedAtTime()
-	want := time.Unix(ts, 0)
-	if !got.Equal(want) {
-		t.Errorf("CreatedAtTime() = %v, want %v", got, want)
+	if !got.Equal(tm) {
+		t.Errorf("CreatedAtTime() = %v, want %v", got, tm)
 	}
 
 	// Test nil case
@@ -316,11 +316,11 @@ func TestCapabilitiesUnmarshal(t *testing.T) {
 
 func TestMessageTimestampTime(t *testing.T) {
 	ts := int64(1702200000)
-	msg := Message{Timestamp: &ts}
+	tm := time.Unix(ts, 0)
+	msg := Message{Timestamp: &FlexTime{Time: tm}}
 	got := msg.TimestampTime()
-	want := time.Unix(ts, 0)
-	if !got.Equal(want) {
-		t.Errorf("TimestampTime() = %v, want %v", got, want)
+	if !got.Equal(tm) {
+		t.Errorf("TimestampTime() = %v, want %v", got, tm)
 	}
 
 	msgNil := Message{}
@@ -330,10 +330,10 @@ func TestMessageTimestampTime(t *testing.T) {
 }
 
 func TestTimelineEntryTimestampTime(t *testing.T) {
-	entry := TimelineEntry{Timestamp: 1702200000}
+	tm := time.Unix(1702200000, 0)
+	entry := TimelineEntry{Timestamp: FlexTime{Time: tm}}
 	got := entry.TimestampTime()
-	want := time.Unix(1702200000, 0)
-	if !got.Equal(want) {
-		t.Errorf("TimestampTime() = %v, want %v", got, want)
+	if !got.Equal(tm) {
+		t.Errorf("TimestampTime() = %v, want %v", got, tm)
 	}
 }

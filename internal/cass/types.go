@@ -1,23 +1,81 @@
 package cass
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 )
 
+// FlexTime wraps time.Time to support unmarshaling from RFC3339 strings or Unix timestamps
+type FlexTime struct {
+	time.Time
+}
+
+// UnmarshalJSON implements custom unmarshaling logic
+func (ft *FlexTime) UnmarshalJSON(data []byte) error {
+	// Handle null
+	if string(data) == "null" {
+		ft.Time = time.Time{}
+		return nil
+	}
+
+	// 1. Try as string (RFC3339)
+	var s string
+	if err := json.Unmarshal(data, &s); err == nil {
+		if s == "" {
+			ft.Time = time.Time{}
+			return nil
+		}
+		t, err := time.Parse(time.RFC3339, s)
+		if err != nil {
+			return err
+		}
+		ft.Time = t
+		return nil
+	}
+
+	// 2. Try as number (Unix seconds or milliseconds)
+	var i int64
+	if err := json.Unmarshal(data, &i); err == nil {
+		if i == 0 {
+			ft.Time = time.Time{}
+			return nil
+		}
+		// Heuristic: If > 1e11 (year 5138), assume milliseconds.
+		// Current time ~1.7e9. 1e11 ms = ~1973.
+		if i > 100000000000 {
+			ft.Time = time.UnixMilli(i)
+		} else {
+			ft.Time = time.Unix(i, 0)
+		}
+		return nil
+	}
+
+	// 3. Try float (for fractional seconds)
+	var f float64
+	if err := json.Unmarshal(data, &f); err == nil {
+		sec := int64(f)
+		nsec := int64((f - float64(sec)) * 1e9)
+		ft.Time = time.Unix(sec, nsec)
+		return nil
+	}
+
+	return fmt.Errorf("unknown time format: %s", string(data))
+}
+
 // SearchHit represents a single search result from CASS
 type SearchHit struct {
-	SourcePath string  `json:"source_path"`
-	LineNumber *int    `json:"line_number,omitempty"`
-	Agent      string  `json:"agent"`
-	Workspace  string  `json:"workspace"`
-	Title      string  `json:"title"`
-	Score      float64 `json:"score"`
-	Snippet    string  `json:"snippet"`
-	CreatedAt  *int64  `json:"created_at,omitempty"`
-	MatchType  string  `json:"match_type"`
-	Content    string  `json:"content,omitempty"`
-	SessionID  string  `json:"session_id,omitempty"`
+	SourcePath string    `json:"source_path"`
+	LineNumber *int      `json:"line_number,omitempty"`
+	Agent      string    `json:"agent"`
+	Workspace  string    `json:"workspace"`
+	Title      string    `json:"title"`
+	Score      float64   `json:"score"`
+	Snippet    string    `json:"snippet"`
+	CreatedAt  *FlexTime `json:"created_at,omitempty"`
+	MatchType  string    `json:"match_type"`
+	Content    string    `json:"content,omitempty"`
+	SessionID  string    `json:"session_id,omitempty"`
 }
 
 // CreatedAtTime returns the CreatedAt timestamp as a time.Time
@@ -25,7 +83,7 @@ func (h SearchHit) CreatedAtTime() time.Time {
 	if h.CreatedAt == nil {
 		return time.Time{}
 	}
-	return time.Unix(*h.CreatedAt, 0)
+	return h.CreatedAt.Time
 }
 
 // Meta contains metadata about the search request
@@ -80,10 +138,10 @@ func (r SearchResponse) HasMore() bool {
 
 // IndexInfo provides details about the search index
 type IndexInfo struct {
-	DocCount    int64     `json:"doc_count"`
-	SizeBytes   int64     `json:"size_bytes"`
-	LastUpdated time.Time `json:"last_updated"`
-	Healthy     bool      `json:"healthy"`
+	DocCount    int64    `json:"doc_count"`
+	SizeBytes   int64    `json:"size_bytes"`
+	LastUpdated FlexTime `json:"last_updated"`
+	Healthy     bool     `json:"healthy"`
 }
 
 // SizeMB returns the index size in megabytes
@@ -125,11 +183,11 @@ type StatusResponse struct {
 	Pending           Pending   `json:"pending"`
 
 	// Flattened fields for backwards compatibility/simpler parsing if needed
-	IndexSize     int64     `json:"index_size,omitempty"`
-	Conversations int64     `json:"conversations,omitempty"`
-	Messages      int64     `json:"messages,omitempty"`
-	LastIndexedAt time.Time `json:"last_indexed_at,omitempty"`
-	StoragePath   string    `json:"storage_path,omitempty"`
+	IndexSize     int64    `json:"index_size,omitempty"`
+	Conversations int64    `json:"conversations,omitempty"`
+	Messages      int64    `json:"messages,omitempty"`
+	LastIndexedAt FlexTime `json:"last_indexed_at,omitempty"`
+	StoragePath   string   `json:"storage_path,omitempty"`
 }
 
 // IsHealthy returns true if the overall status is healthy
@@ -191,10 +249,10 @@ func (e CASSError) Error() string {
 
 // Message represents a chat message in a timeline
 type Message struct {
-	ID        string `json:"id"`
-	Role      string `json:"role"`
-	Content   string `json:"content"`
-	Timestamp *int64 `json:"timestamp,omitempty"`
+	ID        string    `json:"id"`
+	Role      string    `json:"role"`
+	Content   string    `json:"content"`
+	Timestamp *FlexTime `json:"timestamp,omitempty"`
 }
 
 // TimestampTime returns the message timestamp as time.Time
@@ -202,20 +260,20 @@ func (m Message) TimestampTime() time.Time {
 	if m.Timestamp == nil {
 		return time.Time{}
 	}
-	return time.Unix(*m.Timestamp, 0)
+	return m.Timestamp.Time
 }
 
 // TimelineEntry represents an event in the timeline
 type TimelineEntry struct {
-	ID        string `json:"id"`
-	Type      string `json:"type"`
-	Timestamp int64  `json:"timestamp"`
-	Data      any    `json:"data"`
+	ID        string   `json:"id"`
+	Type      string   `json:"type"`
+	Timestamp FlexTime `json:"timestamp"`
+	Data      any      `json:"data"`
 }
 
 // TimestampTime returns the entry timestamp as time.Time
 func (e TimelineEntry) TimestampTime() time.Time {
-	return time.Unix(e.Timestamp, 0)
+	return e.Timestamp.Time
 }
 
 // SearchOptions configures a search request
