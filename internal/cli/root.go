@@ -818,6 +818,9 @@ func init() {
 		newHistoryCmd(),
 		newAnalyticsCmd(),
 
+		// Internal commands
+		newMonitorCmd(),
+
 		// Shell integration
 		newInitCmd(),
 		newCompletionCmd(),

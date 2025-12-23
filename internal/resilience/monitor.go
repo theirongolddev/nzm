@@ -32,6 +32,7 @@ type AgentState struct {
 	Command           string // Original launch command
 	RestartCount      int
 	LastCrash         time.Time
+	LastRestart       time.Time // When agent was last restarted
 	Healthy           bool
 	RateLimited       bool      // Currently rate limited
 	LastRateLimitTime time.Time // When rate limit was last detected
@@ -81,6 +82,67 @@ func (m *Monitor) RegisterAgent(paneID string, paneIndex int, agentType, model, 
 		Command:   command,
 		Healthy:   true,
 	}
+}
+
+// ScanAndRegisterAgents discovers agents from existing tmux panes
+func (m *Monitor) ScanAndRegisterAgents() error {
+	panes, err := tmux.GetPanes(m.session)
+	if err != nil {
+		return err
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for _, p := range panes {
+		// Only monitor agent panes (not user or unknown)
+		if p.Type == tmux.AgentClaude || p.Type == tmux.AgentCodex || p.Type == tmux.AgentGemini {
+			// Skip if already registered
+			if _, exists := m.agents[p.ID]; exists {
+				continue
+			}
+
+			// Reconstruct command template
+			var agentCmdTemplate string
+			switch p.Type {
+			case tmux.AgentClaude:
+				agentCmdTemplate = m.cfg.Agents.Claude
+			case tmux.AgentCodex:
+				agentCmdTemplate = m.cfg.Agents.Codex
+			case tmux.AgentGemini:
+				agentCmdTemplate = m.cfg.Agents.Gemini
+			}
+
+			// Resolve model
+			modelName := m.cfg.Models.GetModelName(string(p.Type), p.Variant)
+
+			// Generate command
+			cmd, err := config.GenerateAgentCommand(agentCmdTemplate, config.AgentTemplateVars{
+				Model:       modelName,
+				ModelAlias:  p.Variant,
+				SessionName: m.session,
+				PaneIndex:   p.Index,
+				AgentType:   string(p.Type),
+				ProjectDir:  m.projectDir,
+				// Note: SystemPromptFile is lost in reconstruction
+			})
+
+			if err != nil {
+				log.Printf("[resilience] Failed to reconstruct command for %s: %v", p.ID, err)
+				continue
+			}
+
+			m.agents[p.ID] = &AgentState{
+				PaneID:    p.ID,
+				PaneIndex: p.Index,
+				AgentType: string(p.Type),
+				Model:     p.Variant,
+				Command:   cmd,
+				Healthy:   true,
+			}
+		}
+	}
+	return nil
 }
 
 // Start begins monitoring agent health in the background
@@ -195,6 +257,11 @@ func (m *Monitor) checkHealth() {
 			agentHealth.ProcessStatus == health.ProcessExited {
 
 			if agentState.Healthy {
+				// Ignore transient errors during startup grace period
+				if !agentState.LastRestart.IsZero() && time.Since(agentState.LastRestart) < 5*time.Second {
+					continue
+				}
+
 				reason := "Agent unhealthy"
 				if len(agentHealth.Issues) > 0 {
 					reason = agentHealth.Issues[0].Message
@@ -392,6 +459,7 @@ func (m *Monitor) restartAgent(agent *AgentState) {
 	m.mu.Lock()
 	if a, ok := m.agents[agent.PaneID]; ok {
 		a.Healthy = true
+		a.LastRestart = time.Now()
 	}
 	m.mu.Unlock()
 }

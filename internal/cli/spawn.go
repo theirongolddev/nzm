@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -19,7 +20,6 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/persona"
 	"github.com/Dicklesworthstone/ntm/internal/plugins"
 	"github.com/Dicklesworthstone/ntm/internal/recipe"
-	"github.com/Dicklesworthstone/ntm/internal/resilience"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
 )
 
@@ -711,16 +711,41 @@ func spawnSessionLogic(opts SpawnOptions) error {
 
 	// Start resilience monitor if auto-restart is enabled
 	if opts.AutoRestart || cfg.Resilience.AutoRestart {
-		monitor := resilience.NewMonitor(opts.Session, dir, cfg)
-		for _, agent := range launchedAgents {
-			monitor.RegisterAgent(agent.paneID, agent.paneIndex, agent.agentType, agent.model, agent.command)
+		// Launch background monitor process
+		// We use os.Executable() to find the ntm binary
+		exe, err := os.Executable()
+		if err != nil {
+			if !IsJSONOutput() {
+				output.PrintWarningf("Failed to determine executable path for auto-restart: %v", err)
+			}
+		} else {
+			// Ensure log directory exists
+			logDir := filepath.Join(dir, ".ntm", "logs")
+			_ = os.MkdirAll(logDir, 0755)
+			logFile, err := os.OpenFile(filepath.Join(logDir, fmt.Sprintf("monitor-%s.log", opts.Session)), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+			
+			cmd := exec.Command(exe, "_monitor", opts.Session)
+			// Detach from current process group to survive exit
+			// Note: SysProcAttr is OS-specific, but minimal setsid is widely supported on unix
+			// We can just rely on not waiting for it.
+			
+			if err == nil {
+				cmd.Stdout = logFile
+				cmd.Stderr = logFile
+			}
+
+			if err := cmd.Start(); err != nil {
+				if !IsJSONOutput() {
+					output.PrintWarningf("Failed to start resilience monitor: %v", err)
+				}
+			} else {
+				if !IsJSONOutput() {
+					output.PrintInfof("Auto-restart enabled (monitor PID: %d, logs: .ntm/logs/)", cmd.Process.Pid)
+				}
+				// Release resources, let it run
+				_ = cmd.Process.Release()
+			}
 		}
-		monitor.Start(context.Background())
-		if !IsJSONOutput() {
-			output.PrintInfof("Auto-restart enabled (health check every %ds, max %d restarts)",
-				cfg.Resilience.HealthCheckSeconds, cfg.Resilience.MaxRestarts)
-		}
-		// Note: monitor runs in background, will continue until tmux session ends
 	}
 
 	// Register session as Agent Mail agent (non-blocking)
