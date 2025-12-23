@@ -239,8 +239,8 @@ func generatePreCommitScript(ntmPath, repoRoot string) string {
 set -e
 
 # Run UBS scan on staged files
-%s hooks run pre-commit "$@"
-UBS_EXIT=$?
+UBS_EXIT=0
+%s hooks run pre-commit "$@" || UBS_EXIT=$?
 
 # Chain to backup hook if it exists
 BACKUP_HOOK="$(dirname "$0")/pre-commit.backup"

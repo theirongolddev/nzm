@@ -126,6 +126,7 @@ func (rm *RecoveryManager) SendRecoveryPrompt(session string, paneIndex int) (bo
 }
 
 // SendRecoveryPromptByID sends recovery with explicit pane ID.
+// It executes asynchronously to avoid blocking the UI during prompt construction.
 func (rm *RecoveryManager) SendRecoveryPromptByID(session string, paneIndex int, paneID, triggerText string) (bool, error) {
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
@@ -142,34 +143,39 @@ func (rm *RecoveryManager) SendRecoveryPromptByID(session string, paneIndex int,
 		return false, nil // Max recoveries reached
 	}
 
-	// Build target for tmux (session:pane_index)
-	target := fmt.Sprintf("%s:%d", session, paneIndex)
-
-	// Build prompt with optional bead context
-	promptToSend := BuildContextAwarePrompt(rm.prompt, rm.includeBeadContext)
-
-	// Send the recovery prompt
-	if err := tmux.SendKeys(target, promptToSend, true); err != nil {
-		return false, fmt.Errorf("failed to send recovery prompt: %w", err)
-	}
-
-	// Update state
+	// Update state immediately to prevent re-entry
 	now := time.Now()
 	rm.lastRecovery[paneID] = now
 	rm.recoveryCount[paneID]++
 
-	// Record event
-	rm.recoveryEvents = append(rm.recoveryEvents, RecoveryEvent{
-		PaneID:      paneID,
-		Session:     session,
-		PaneIndex:   paneIndex,
-		SentAt:      now,
-		Prompt:      rm.prompt,
-		TriggerText: triggerText,
-	})
+	// Build target for tmux (session:pane_index)
+	target := fmt.Sprintf("%s:%d", session, paneIndex)
 
-	// Prune old events
-	rm.pruneEvents()
+	// Execute recovery asynchronously
+	go func() {
+		// Build prompt with optional bead context (potentially slow)
+		promptToSend := BuildContextAwarePrompt(rm.prompt, rm.includeBeadContext)
+
+		// Send the recovery prompt
+		if err := tmux.SendKeys(target, promptToSend, true); err != nil {
+			// Log error if possible, or just fail silently
+			// Since we can't return the error, we rely on the next check to retry (after cooldown)
+			return
+		}
+
+		// Record event after successful send
+		rm.mu.Lock()
+		defer rm.mu.Unlock()
+		rm.recoveryEvents = append(rm.recoveryEvents, RecoveryEvent{
+			PaneID:      paneID,
+			Session:     session,
+			PaneIndex:   paneIndex,
+			SentAt:      now,
+			Prompt:      rm.prompt,
+			TriggerText: triggerText,
+		})
+		rm.pruneEvents()
+	}()
 
 	return true, nil
 }

@@ -4,10 +4,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/BurntSushi/toml"
 )
+
+// pluginNameRegex enforces allowed characters for plugin names (must match tmux pane regex)
+var pluginNameRegex = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
 // AgentPlugin defines a custom agent type loaded from config
 type AgentPlugin struct {
@@ -49,6 +53,11 @@ func LoadAgentPlugins(dir string) ([]AgentPlugin, error) {
 			// Set defaults/validate
 			if cfg.Agent.Name == "" {
 				cfg.Agent.Name = strings.TrimSuffix(entry.Name(), ".toml")
+			}
+
+			if !pluginNameRegex.MatchString(cfg.Agent.Name) {
+				fmt.Printf("⚠ Warning: plugin %s has invalid name %q (allowed: a-z, 0-9, _, -), skipping\n", entry.Name(), cfg.Agent.Name)
+				continue
 			}
 
 			if cfg.Agent.Command == "" {

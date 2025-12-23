@@ -342,8 +342,22 @@ func paneMatchesSelector(p tmux.Pane, selector string) bool {
 	return false
 }
 
-// filterOutput applies regex line filtering then optional code-block extraction.
+// filterOutput applies optional code-block extraction then regex line filtering.
 func filterOutput(output string, regex *regexp.Regexp, codeOnly bool) string {
+	if codeOnly {
+		blocks := codeblock.ExtractFromText(output)
+		var blockContents []string
+		for _, b := range blocks {
+			if b.Content != "" {
+				blockContents = append(blockContents, b.Content)
+			}
+		}
+		if len(blockContents) == 0 {
+			return ""
+		}
+		output = strings.Join(blockContents, "\n\n")
+	}
+
 	if regex != nil {
 		lines := strings.Split(output, "\n")
 		var filtered []string
@@ -355,19 +369,5 @@ func filterOutput(output string, regex *regexp.Regexp, codeOnly bool) string {
 		output = strings.Join(filtered, "\n")
 	}
 
-	if !codeOnly {
-		return output
-	}
-
-	blocks := codeblock.ExtractFromText(output)
-	var blockContents []string
-	for _, b := range blocks {
-		if b.Content != "" {
-			blockContents = append(blockContents, b.Content)
-		}
-	}
-	if len(blockContents) == 0 {
-		return ""
-	}
-	return strings.Join(blockContents, "\n\n")
+	return output
 }

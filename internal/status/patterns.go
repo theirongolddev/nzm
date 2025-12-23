@@ -120,7 +120,7 @@ func DetectIdleFromOutput(output string, agentType string) bool {
 	// Check for both "$ " and just "$" since TrimSpace may remove trailing space.
 	trimmed := strings.TrimSpace(clean)
 	if !knownAgentTypes[agentType] {
-		if strings.HasSuffix(trimmed, "$") || strings.HasSuffix(trimmed, "$ ") {
+		if strings.HasSuffix(trimmed, "$") {
 			return true
 		}
 	}

@@ -60,7 +60,7 @@ func Execute(ctx context.Context, p Pipeline) error {
 		}
 
 		// 3. Send prompt
-		if err := tmux.SendKeys(paneID, prompt, true); err != nil {
+		if err := tmux.PasteKeys(paneID, prompt, true); err != nil {
 			return fmt.Errorf("stage %d sending prompt: %w", i+1, err)
 		}
 
@@ -108,25 +108,32 @@ func extractNewOutput(before, after string) string {
 
 	// If history scrolled (before is not a strict prefix), try to overlap.
 	// Find the longest suffix of 'before' that matches a prefix of 'after'.
-	// This is O(N^2) in worst case but N=2000 chars/lines is small.
-	// Optimization: limit search window.
-	
-	// Actually, tmux capture is usually stable. If buffer shifted, 'before' start is gone.
-	// But 'after' should contain the tail of 'before'.
-	// Find where 'before' ends inside 'after'.
-	
-	// Heuristic: take the last 100 chars of 'before' and find them in 'after'.
 	const overlapSize = 100
+	var tail string
 	if len(before) > overlapSize {
-		tail := before[len(before)-overlapSize:]
-		if idx := strings.Index(after, tail); idx != -1 {
-			// Found the overlap point
-			return after[idx+len(tail):]
-		}
+		tail = before[len(before)-overlapSize:]
 	} else {
-		if idx := strings.Index(after, before); idx != -1 {
-			return after[idx+len(before):]
+		tail = before
+	}
+
+	// Search for tail in after and verify it matches the end of 'before'
+	start := 0
+	for {
+		idx := strings.Index(after[start:], tail)
+		if idx == -1 {
+			break
 		}
+		actualIdx := start + idx
+		matchEnd := actualIdx + len(tail)
+
+		// Verify: is the prefix of 'after' up to this match a suffix of 'before'?
+		candidate := after[:matchEnd]
+		if strings.HasSuffix(before, candidate) {
+			return after[matchEnd:]
+		}
+
+		// Continue searching
+		start = actualIdx + 1
 	}
 
 	// Fallback: return everything if we can't match (better than nothing)

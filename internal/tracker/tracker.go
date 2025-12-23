@@ -398,12 +398,18 @@ func SnapshotDirectory(root string, opts SnapshotOptions) (map[string]FileState,
 
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return err
+			// Permission denied or other error accessing path.
+			// If it's a directory, skip it to avoid getting stuck.
+			// Otherwise just skip this file.
+			if d != nil && d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
 		}
 
 		// Skip configured ignore prefixes
 		for _, p := range opts.IgnorePaths {
-			if strings.HasPrefix(path, p) {
+			if path == p || strings.HasPrefix(path, p+string(filepath.Separator)) {
 				if d.IsDir() {
 					return filepath.SkipDir
 				}

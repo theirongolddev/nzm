@@ -8,7 +8,6 @@ import (
 	"strings"
 	"text/tabwriter"
 	"time"
-	"unicode/utf8"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -493,12 +492,8 @@ func runStatus(w io.Writer, session string, tags []string) error {
 			cmdWidth = 10
 		}
 
-		if actual := utf8.RuneCountInString(p.Title); actual > titleWidth {
-			titleWidth = actual
-		}
-
 		title := layout.TruncateRunes(p.Title, titleWidth, "…")
-		titlePart := fmt.Sprintf("%*s", titleWidth, title)
+		titlePart := fmt.Sprintf("%-*s", titleWidth, title)
 
 		if variantWidth > 0 {
 			variant := ""
