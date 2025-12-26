@@ -192,6 +192,7 @@ type Model struct {
 	fetchingHistory     bool
 	fetchingFileChanges bool
 	fetchingScan        bool
+	scanDisabled        bool // User toggled UBS scanning off
 
 	// Coalescing/cancellation for user-triggered refreshes
 	sessionFetchPending bool
@@ -323,6 +324,7 @@ type KeyMap struct {
 	CassSearch     key.Binding // 'ctrl+s' to open CASS search
 	Help           key.Binding // '?' to toggle help overlay
 	Diagnostics    key.Binding // 'd' to toggle diagnostics
+	ScanToggle     key.Binding // 'u' to toggle UBS scanning
 	Tab            key.Binding
 	ShiftTab       key.Binding
 	Num1           key.Binding
@@ -374,6 +376,7 @@ var dashKeys = KeyMap{
 	CassSearch:     key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", "cass search")),
 	Help:           key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "toggle help")),
 	Diagnostics:    key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "toggle diagnostics")),
+	ScanToggle:     key.NewBinding(key.WithKeys("u"), key.WithHelp("u", "toggle UBS scan")),
 	Tab:            key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next panel")),
 	ShiftTab:       key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "prev panel")),
 	Num1:           key.NewBinding(key.WithKeys("1")),
@@ -1132,7 +1135,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					cmds = append(cmds, cmd)
 				}
 			}
-			if m.scanRefreshInterval > 0 && now.Sub(m.lastScanFetch) >= m.scanRefreshInterval && !m.fetchingScan {
+			if !m.scanDisabled && m.scanRefreshInterval > 0 && now.Sub(m.lastScanFetch) >= m.scanRefreshInterval && !m.fetchingScan {
 				m.lastScanFetch = now
 				if cmd := m.requestScanFetch(false); cmd != nil {
 					cmds = append(cmds, cmd)
@@ -1473,6 +1476,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case key.Matches(msg, dashKeys.Diagnostics):
 			m.showDiagnostics = !m.showDiagnostics
+			return m, nil
+		case key.Matches(msg, dashKeys.ScanToggle):
+			m.scanDisabled = !m.scanDisabled
 			return m, nil
 
 		case key.Matches(msg, dashKeys.Quit):
