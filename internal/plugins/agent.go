@@ -1,7 +1,7 @@
 package plugins
 
 import (
-	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -46,7 +46,7 @@ func LoadAgentPlugins(dir string) ([]AgentPlugin, error) {
 			path := filepath.Join(dir, entry.Name())
 			var cfg agentConfigFile
 			if _, err := toml.DecodeFile(path, &cfg); err != nil {
-				fmt.Printf("⚠ Warning: failed to parse plugin %s: %v\n", entry.Name(), err)
+				log.Printf("plugins: failed to parse plugin %s: %v", entry.Name(), err)
 				continue
 			}
 
@@ -56,12 +56,12 @@ func LoadAgentPlugins(dir string) ([]AgentPlugin, error) {
 			}
 
 			if !pluginNameRegex.MatchString(cfg.Agent.Name) {
-				fmt.Printf("⚠ Warning: plugin %s has invalid name %q (allowed: a-z, 0-9, _, -), skipping\n", entry.Name(), cfg.Agent.Name)
+				log.Printf("plugins: plugin %s has invalid name %q (allowed: a-z, 0-9, _, -), skipping", entry.Name(), cfg.Agent.Name)
 				continue
 			}
 
 			if cfg.Agent.Command == "" {
-				fmt.Printf("⚠ Warning: plugin %s missing 'command' field, skipping\n", cfg.Agent.Name)
+				log.Printf("plugins: plugin %s missing 'command' field", cfg.Agent.Name)
 				continue
 			}
 

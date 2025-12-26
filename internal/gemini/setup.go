@@ -4,6 +4,7 @@ package gemini
 import (
 	"context"
 	"fmt"
+	"log"
 	"regexp"
 	"strings"
 	"time"
@@ -145,7 +146,7 @@ func SelectProModel(ctx context.Context, paneID string, cfg SetupConfig) error {
 		// If menu doesn't appear, maybe /model isn't supported or already at Pro
 		// Try to continue anyway - not a fatal error
 		if cfg.Verbose {
-			fmt.Printf("Warning: model menu not detected, attempting selection anyway\n")
+			log.Printf("gemini setup: model menu not detected, attempting selection anyway")
 		}
 	}
 
@@ -172,9 +173,9 @@ func SelectProModel(ctx context.Context, paneID string, cfg SetupConfig) error {
 	output, err := tmux.CapturePaneOutput(paneID, 30)
 	if err == nil && cfg.Verbose {
 		if isProModelSelected(output) {
-			fmt.Printf("✓ Gemini Pro model selected\n")
+			log.Printf("gemini setup: Pro model selected successfully")
 		} else {
-			fmt.Printf("⚠ Could not verify Pro model selection\n")
+			log.Printf("gemini setup: could not verify Pro model selection")
 		}
 	}
 

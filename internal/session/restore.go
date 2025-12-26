@@ -2,6 +2,7 @@ package session
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -95,7 +96,7 @@ func Restore(state *SessionState, opts RestoreOptions) error {
 		currentBranch := getCurrentGitBranch(workDir)
 		if currentBranch != "" && currentBranch != state.GitBranch {
 			// Just warn, don't fail
-			fmt.Printf("Warning: Current branch '%s' differs from saved branch '%s'\n", currentBranch, state.GitBranch)
+			log.Printf("restore: current branch '%s' differs from saved branch '%s'", currentBranch, state.GitBranch)
 		}
 	}
 
