@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"fmt"
+	"log"
 	"regexp"
 	"time"
 
@@ -126,8 +127,8 @@ func (o *Orchestrator) WaitForShellPrompt(paneID string, timeout time.Duration) 
 // PromptBrowserAuth simulates prompting the user
 func (o *Orchestrator) PromptBrowserAuth(email string) {
 	// In a real CLI/TUI, this might print to the user pane or show a dialog.
-	// For now, we assume the caller handles the UI part or we log it.
-	fmt.Printf("Please log into %s in your browser, then press Enter (if interactive).\n", email)
+	// For now, we log the message - caller is expected to handle actual UI prompts.
+	log.Printf("Auth prompt: Please log into %s in your browser", email)
 }
 
 // StartNewAgentSession launches the agent command in the pane
