@@ -16,6 +16,10 @@ type TimelineResponse struct {
 
 // Timeline fetches agent activity timeline
 func (c *Client) Timeline(ctx context.Context, since, groupBy string) (*TimelineResponse, error) {
+	if !c.IsInstalled() {
+		return nil, ErrNotInstalled
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
 
