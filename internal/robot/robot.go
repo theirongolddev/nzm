@@ -1310,19 +1310,115 @@ func getBlockersForIssue(issueID string) []string {
 
 func detectAgentType(title string) string {
 	// Try to detect from pane title
+	titleLower := toLower(title)
+
+	// Check canonical forms
 	switch {
-	case contains(title, "claude"):
+	case contains(titleLower, "claude"):
 		return "claude"
-	case contains(title, "codex"):
+	case contains(titleLower, "codex"):
 		return "codex"
-	case contains(title, "gemini"):
+	case contains(titleLower, "gemini"):
 		return "gemini"
-	case contains(title, "cursor"):
+	case contains(titleLower, "cursor"):
 		return "cursor"
-	case contains(title, "windsurf"):
+	case contains(titleLower, "windsurf"):
 		return "windsurf"
-	case contains(title, "aider"):
+	case contains(titleLower, "aider"):
 		return "aider"
+	}
+
+	// Check short forms in pane titles (e.g., "session__cc_1", "project__cod_2")
+	// The pattern is: prefix__<short>_suffix or prefix__<short>__suffix
+	// We use word boundary matching via "__<short>_" or "__<short>__"
+	switch {
+	case containsShortForm(titleLower, "cc"):
+		return "claude"
+	case containsShortForm(titleLower, "cod"):
+		return "codex"
+	case containsShortForm(titleLower, "gmi"):
+		return "gemini"
+	}
+
+	return "unknown"
+}
+
+// containsShortForm checks if title contains the short form as a word boundary pattern
+// It matches patterns like "__cc_" or "__cc__" to avoid false positives
+func containsShortForm(title, short string) bool {
+	// Check for "__<short>_" or "__<short>__"
+	pattern1 := "__" + short + "_"
+	pattern2 := "__" + short + "__"
+	return containsLower(title, pattern1) || containsLower(title, pattern2)
+}
+
+// ResolveAgentType maps agent type aliases to canonical names.
+// For example: "cc" -> "claude", "cod" -> "codex"
+func ResolveAgentType(t string) string {
+	// Trim whitespace
+	trimmed := t
+	for len(trimmed) > 0 && (trimmed[0] == ' ' || trimmed[0] == '\t') {
+		trimmed = trimmed[1:]
+	}
+	for len(trimmed) > 0 && (trimmed[len(trimmed)-1] == ' ' || trimmed[len(trimmed)-1] == '\t') {
+		trimmed = trimmed[:len(trimmed)-1]
+	}
+
+	lower := toLower(trimmed)
+	switch lower {
+	case "cc", "claude-code", "claude_code", "claude":
+		return "claude"
+	case "cod", "codex-cli", "codex_cli", "codex":
+		return "codex"
+	case "gmi", "gemini-cli", "gemini_cli", "gemini":
+		return "gemini"
+	case "cursor":
+		return "cursor"
+	case "windsurf":
+		return "windsurf"
+	case "aider":
+		return "aider"
+	case "user":
+		return "user"
+	default:
+		return lower
+	}
+}
+
+// detectModel attempts to detect the model from agent type and pane title.
+func detectModel(agentType, title string) string {
+	titleLower := toLower(title)
+	// Check for specific model mentions in title
+	switch {
+	case contains(titleLower, "opus"):
+		return "opus"
+	case contains(titleLower, "sonnet"):
+		return "sonnet"
+	case contains(titleLower, "haiku"):
+		return "haiku"
+	case contains(titleLower, "gpt4") || contains(titleLower, "gpt-4"):
+		return "gpt4"
+	case contains(titleLower, "o1"):
+		return "o1"
+	case contains(titleLower, "o3"):
+		return "o3"
+	case contains(titleLower, "o4-mini"):
+		return "o4-mini"
+	case contains(titleLower, "flash"):
+		return "flash"
+	case contains(titleLower, "pro"):
+		return "pro"
+	case contains(titleLower, "gemini"):
+		return "gemini"
+	}
+	// Default models by agent type
+	switch agentType {
+	case "claude":
+		return "sonnet" // Default Claude model
+	case "codex":
+		return "gpt4" // Default Codex model
+	case "gemini":
+		return "gemini" // Default Gemini model
 	default:
 		return "unknown"
 	}
@@ -1968,6 +2064,8 @@ type SendOutput struct {
 	Successful     []string         `json:"successful"`
 	Failed         []SendError      `json:"failed"`
 	MessagePreview string           `json:"message_preview"`
+	DryRun         bool             `json:"dry_run,omitempty"`
+	WouldSendTo    []string         `json:"would_send_to,omitempty"`
 	AgentHints     *SendAgentHints  `json:"_agent_hints,omitempty"`
 }
 
@@ -1992,6 +2090,7 @@ type SendOptions struct {
 	AgentTypes []string // Filter by agent types (e.g., "claude", "codex")
 	Exclude    []string // Panes to exclude
 	DelayMs    int      // Delay between sends in milliseconds
+	DryRun     bool     // If true, show what would be sent without actually sending
 }
 
 // PrintSend sends a message to multiple panes atomically and returns structured results
@@ -3155,4 +3254,192 @@ func countInbox(ctx context.Context, client *agentmail.Client, projectKey, agent
 		return 0
 	}
 	return len(msgs)
+}
+
+// ContextOutput is the structured output for --robot-context
+type ContextOutput struct {
+	RobotResponse
+	Session    string             `json:"session"`
+	CapturedAt time.Time          `json:"captured_at"`
+	Agents     []AgentContextInfo `json:"agents"`
+	Summary    ContextSummary     `json:"summary"`
+	AgentHints *ContextAgentHints `json:"_agent_hints,omitempty"`
+}
+
+// AgentContextInfo contains context window information for a single agent pane
+type AgentContextInfo struct {
+	Pane            string  `json:"pane"`
+	PaneIdx         int     `json:"pane_idx"`
+	AgentType       string  `json:"agent_type"`
+	Model           string  `json:"model"`
+	EstimatedTokens int     `json:"estimated_tokens"`
+	WithOverhead    int     `json:"with_overhead"`
+	ContextLimit    int     `json:"context_limit"`
+	UsagePercent    float64 `json:"usage_percent"`
+	UsageLevel      string  `json:"usage_level"`
+	Confidence      string  `json:"confidence"`
+	State           string  `json:"state"`
+}
+
+// ContextSummary aggregates context usage across all agents
+type ContextSummary struct {
+	TotalAgents    int     `json:"total_agents"`
+	HighUsageCount int     `json:"high_usage_count"`
+	AvgUsage       float64 `json:"avg_usage"`
+}
+
+// ContextAgentHints provides agent guidance for context output
+type ContextAgentHints struct {
+	LowUsageAgents  []string `json:"low_usage_agents,omitempty"`
+	HighUsageAgents []string `json:"high_usage_agents,omitempty"`
+	Suggestions     []string `json:"suggestions,omitempty"`
+}
+
+// getUsageLevel returns a human-readable usage level based on percentage
+func getUsageLevel(pct float64) string {
+	switch {
+	case pct < 40:
+		return "Low"
+	case pct < 70:
+		return "Medium"
+	case pct < 85:
+		return "High"
+	default:
+		return "Critical"
+	}
+}
+
+// getContextLimit returns the context window limit for a model
+func getContextLimit(model string) int {
+	switch model {
+	case "opus", "sonnet":
+		return 200000
+	case "haiku":
+		return 200000
+	case "gpt4", "gpt-4", "o4-mini":
+		return 128000
+	case "o1", "o3":
+		return 200000
+	case "gemini", "pro", "flash":
+		return 1000000
+	default:
+		return 128000 // Conservative default
+	}
+}
+
+// generateContextHints creates agent hints based on usage patterns
+func generateContextHints(lowUsage, highUsage []string, highCount, total int) *ContextAgentHints {
+	if total == 0 {
+		return nil
+	}
+
+	hints := &ContextAgentHints{
+		LowUsageAgents:  lowUsage,
+		HighUsageAgents: highUsage,
+		Suggestions:     make([]string, 0),
+	}
+
+	if highCount == 0 {
+		hints.Suggestions = append(hints.Suggestions, "All agents healthy - context usage is low across the board")
+	} else if highCount == total {
+		hints.Suggestions = append(hints.Suggestions, "All agents have high context usage - consider spawning new sessions")
+	} else {
+		hints.Suggestions = append(hints.Suggestions, fmt.Sprintf("%d agent(s) have high context usage", highCount))
+		if len(lowUsage) > 0 {
+			hints.Suggestions = append(hints.Suggestions, fmt.Sprintf("%d agent(s) have room for additional work", len(lowUsage)))
+		}
+	}
+
+	return hints
+}
+
+// PrintContext outputs context window usage information for all agents in a session.
+func PrintContext(session string, lines int) error {
+	if !tmux.SessionExists(session) {
+		return encodeJSON(ContextOutput{
+			RobotResponse: NewErrorResponse(
+				fmt.Errorf("session '%s' not found", session),
+				ErrCodeSessionNotFound,
+				"Use 'ntm list' to see available sessions",
+			),
+			Session:    session,
+			CapturedAt: time.Now().UTC(),
+		})
+	}
+
+	panes, err := tmux.GetPanes(session)
+	if err != nil {
+		return encodeJSON(ContextOutput{
+			RobotResponse: NewErrorResponse(err, ErrCodeInternalError, "Failed to get panes"),
+			Session:       session,
+			CapturedAt:    time.Now().UTC(),
+		})
+	}
+
+	output := ContextOutput{
+		RobotResponse: NewRobotResponse(true),
+		Session:       session,
+		CapturedAt:    time.Now().UTC(),
+		Agents:        make([]AgentContextInfo, 0, len(panes)),
+	}
+
+	var lowUsage, highUsage []string
+	var totalUsage float64
+
+	for _, pane := range panes {
+		agentType := detectAgentType(pane.Title)
+		if agentType == "unknown" || agentType == "user" {
+			continue // Skip non-agent panes
+		}
+
+		model := detectModel(agentType, pane.Title)
+
+		scrollback, _ := tmux.CapturePaneOutput(pane.ID, lines)
+		cleanText := stripANSI(scrollback)
+		lineList := splitLines(cleanText)
+		state := detectState(lineList, pane.Title)
+
+		charCount := len(cleanText)
+		// Rough token estimate: ~4 chars per token
+		estTokens := charCount / 4
+		// Add overhead for system prompts and other context (2.5x multiplier)
+		withOverhead := int(float64(estTokens) * 2.5)
+		contextLimit := getContextLimit(model)
+		usagePct := float64(withOverhead) / float64(contextLimit) * 100
+
+		paneKey := fmt.Sprintf("%d", pane.Index)
+		usageLevel := getUsageLevel(usagePct)
+
+		if usagePct < 50 {
+			lowUsage = append(lowUsage, paneKey)
+		} else if usagePct >= 70 {
+			highUsage = append(highUsage, paneKey)
+		}
+		totalUsage += usagePct
+
+		agentInfo := AgentContextInfo{
+			Pane:            paneKey,
+			PaneIdx:         pane.Index,
+			AgentType:       agentType,
+			Model:           model,
+			EstimatedTokens: estTokens,
+			WithOverhead:    withOverhead,
+			ContextLimit:    contextLimit,
+			UsagePercent:    usagePct,
+			UsageLevel:      usageLevel,
+			Confidence:      "low", // Scrollback-based estimation is low confidence
+			State:           state,
+		}
+		output.Agents = append(output.Agents, agentInfo)
+	}
+
+	output.Summary.TotalAgents = len(output.Agents)
+	output.Summary.HighUsageCount = len(highUsage)
+	if len(output.Agents) > 0 {
+		output.Summary.AvgUsage = totalUsage / float64(len(output.Agents))
+	}
+
+	output.AgentHints = generateContextHints(lowUsage, highUsage, len(highUsage), len(output.Agents))
+
+	return encodeJSON(output)
 }

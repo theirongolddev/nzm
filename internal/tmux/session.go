@@ -604,6 +604,17 @@ func SendKeys(target, keys string, enter bool) error {
 	return DefaultClient.SendKeys(target, keys, enter)
 }
 
+// PasteKeys pastes content to a pane using tmux's paste mechanism.
+// This is an alias for SendKeys for now, but may be optimized for large content later.
+func (c *Client) PasteKeys(target, content string, enter bool) error {
+	return c.SendKeys(target, content, enter)
+}
+
+// PasteKeys pastes content to a pane (default client)
+func PasteKeys(target, content string, enter bool) error {
+	return DefaultClient.PasteKeys(target, content, enter)
+}
+
 // SendInterrupt sends Ctrl+C to a pane
 func (c *Client) SendInterrupt(target string) error {
 	return c.RunSilent("send-keys", "-t", target, "C-c")
