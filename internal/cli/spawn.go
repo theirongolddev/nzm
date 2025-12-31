@@ -771,13 +771,11 @@ func spawnSessionLogic(opts SpawnOptions) error {
 			}
 		}
 
-		// Calculate stagger delay for this agent
+		// Calculate stagger delay for this agent (used for tracking/JSON output)
 		var promptDelay time.Duration
 		if opts.StaggerEnabled && opts.Stagger > 0 {
 			promptDelay = time.Duration(staggerAgentIdx) * opts.Stagger
-			if promptDelay > maxStaggerDelay {
-				maxStaggerDelay = promptDelay
-			}
+			// Note: maxStaggerDelay is updated below only when a prompt is actually scheduled
 		}
 
 		// Inject user prompt if provided
@@ -798,6 +796,10 @@ func spawnSessionLogic(opts SpawnOptions) error {
 						}
 					}
 				}()
+				// Track max delay only when we actually schedule a staggered prompt
+				if delay > maxStaggerDelay {
+					maxStaggerDelay = delay
+				}
 				if !IsJSONOutput() {
 					fmt.Printf("  → Agent %d prompt scheduled in %v\n", staggerAgentIdx+1, delay)
 				}
