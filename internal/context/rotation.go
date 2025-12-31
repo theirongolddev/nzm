@@ -454,11 +454,17 @@ func (r *Rotator) tryCompaction(session, agentID, paneID string) *CompactionResu
 
 	// Try the first compaction command (builtin if available)
 	cmd := cmds[0]
-	if err := tmux.SendKeys(paneID, cmd.Command, !cmd.IsPrompt); err != nil {
+	// Both slash commands and prompts need enter=true to be submitted
+	if err := tmux.SendKeys(paneID, cmd.Command, true); err != nil {
 		return &CompactionResult{Success: false, Error: fmt.Sprintf("failed to send compaction command: %v", err)}
 	}
 
-	state.UpdateState(cmd, CompactionBuiltin)
+	// Set method based on whether this is a builtin command or summarization prompt
+	method := CompactionBuiltin
+	if cmd.IsPrompt {
+		method = CompactionSummarize
+	}
+	state.UpdateState(cmd, method)
 
 	// Wait for compaction to complete
 	time.Sleep(cmd.WaitTime)
