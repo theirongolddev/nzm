@@ -244,6 +244,10 @@ type CompactionState struct {
 
 // NewCompactionState creates a new state for tracking a compaction attempt.
 func (c *Compactor) NewCompactionState(agentID string) (*CompactionState, error) {
+	if c.monitor == nil {
+		return nil, fmt.Errorf("no monitor available")
+	}
+
 	estimate := c.monitor.GetEstimate(agentID)
 	if estimate == nil {
 		return nil, fmt.Errorf("failed to get initial estimate: agent not found or no data")
@@ -266,6 +270,14 @@ func (state *CompactionState) UpdateState(cmd CompactionCommand, method Compacti
 
 // FinishCompaction completes a compaction attempt and returns the result.
 func (c *Compactor) FinishCompaction(state *CompactionState) (*CompactionResult, error) {
+	if c.monitor == nil {
+		return &CompactionResult{
+			Success: false,
+			Method:  state.Method,
+			Error:   "no monitor available",
+		}, fmt.Errorf("no monitor available")
+	}
+
 	afterEstimate := c.monitor.GetEstimate(state.AgentID)
 	if afterEstimate == nil {
 		return &CompactionResult{
@@ -314,6 +326,10 @@ func (c *Compactor) PreRotationCheck(
 	rotateThreshold float64,
 	lastCompactionResult *CompactionResult,
 ) (shouldRotate bool, reason string) {
+	if c.monitor == nil {
+		return true, "no monitor available, proceeding with rotation"
+	}
+
 	estimate := c.monitor.GetEstimate(agentID)
 	if estimate == nil {
 		return true, "cannot estimate context, proceeding with rotation: no estimate available"

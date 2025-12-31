@@ -385,9 +385,42 @@ func TestCompactorWithNilMonitor(t *testing.T) {
 
 	c := NewCompactor(nil, DefaultCompactorConfig())
 
+	// Test ShouldTryCompaction with nil monitor
 	shouldCompact, reason := c.ShouldTryCompaction("any-agent", 0.5)
 	if shouldCompact {
 		t.Error("should not try compaction with nil monitor")
+	}
+	if !strings.Contains(reason, "no monitor") {
+		t.Errorf("reason should mention no monitor: %s", reason)
+	}
+
+	// Test NewCompactionState with nil monitor
+	state, err := c.NewCompactionState("any-agent")
+	if state != nil {
+		t.Error("NewCompactionState should return nil state with nil monitor")
+	}
+	if err == nil || !strings.Contains(err.Error(), "no monitor") {
+		t.Errorf("NewCompactionState error should mention no monitor: %v", err)
+	}
+
+	// Test FinishCompaction with nil monitor
+	// Create a dummy state for testing
+	dummyState := &CompactionState{
+		AgentID: "test",
+		Method:  CompactionSummarize,
+	}
+	result, err := c.FinishCompaction(dummyState)
+	if err == nil || !strings.Contains(err.Error(), "no monitor") {
+		t.Errorf("FinishCompaction error should mention no monitor: %v", err)
+	}
+	if result == nil || result.Success {
+		t.Error("FinishCompaction result should indicate failure with nil monitor")
+	}
+
+	// Test PreRotationCheck with nil monitor
+	shouldRotate, reason := c.PreRotationCheck("any-agent", 0.95, nil)
+	if !shouldRotate {
+		t.Error("PreRotationCheck should return true (proceed with rotation) when no monitor")
 	}
 	if !strings.Contains(reason, "no monitor") {
 		t.Errorf("reason should mention no monitor: %s", reason)
