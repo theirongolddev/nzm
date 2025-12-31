@@ -75,9 +75,10 @@ func (d Duration) MarshalText() ([]byte, error) {
 type ErrorAction string
 
 const (
-	ErrorActionFail     ErrorAction = "fail"
-	ErrorActionContinue ErrorAction = "continue"
-	ErrorActionRetry    ErrorAction = "retry"
+	ErrorActionFail     ErrorAction = "fail"      // Wait for all, report all errors
+	ErrorActionFailFast ErrorAction = "fail_fast" // Cancel remaining on first error
+	ErrorActionContinue ErrorAction = "continue"  // Ignore errors, continue workflow
+	ErrorActionRetry    ErrorAction = "retry"     // Retry failed steps
 )
 
 // Step represents a single step in the workflow

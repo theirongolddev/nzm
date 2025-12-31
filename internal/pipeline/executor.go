@@ -56,6 +56,7 @@ type Executor struct {
 
 	// Runtime state (reset per execution)
 	state     *ExecutionState
+	stateMu   sync.RWMutex // Protects state.Steps for concurrent access
 	graph     *DependencyGraph
 	progress  chan<- ProgressEvent
 	cancelFn  context.CancelFunc
@@ -496,7 +497,10 @@ func (e *Executor) executeStepOnce(ctx context.Context, step *Step, workflow *Wo
 	return result
 }
 
-// executeParallel runs parallel sub-steps concurrently
+// executeParallel runs parallel sub-steps concurrently.
+// Supports error modes: fail (wait all), fail_fast (cancel on first error), continue (ignore errors).
+// Applies group-level timeout if step.Timeout is set.
+// Coordinates agent selection to avoid using the same agent for multiple parallel steps.
 func (e *Executor) executeParallel(ctx context.Context, step *Step, workflow *Workflow) StepResult {
 	result := StepResult{
 		StepID:    step.ID,
@@ -504,24 +508,81 @@ func (e *Executor) executeParallel(ctx context.Context, step *Step, workflow *Wo
 		StartedAt: time.Now(),
 	}
 
+	// Determine error handling mode
+	onError := step.OnError
+	if onError == "" {
+		onError = workflow.Settings.OnError
+	}
+	if onError == "" {
+		onError = ErrorActionFail
+	}
+
+	// Apply group-level timeout if specified
+	if step.Timeout.Duration > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, step.Timeout.Duration)
+		defer cancel()
+	}
+
+	// Create cancellable context for fail_fast mode
+	parallelCtx, cancelParallel := context.WithCancel(ctx)
+	defer cancelParallel()
+
 	e.emitProgress("parallel_start", step.ID,
-		fmt.Sprintf("Starting parallel group with %d steps", len(step.Parallel)),
+		fmt.Sprintf("Starting parallel group with %d steps (on_error=%s)", len(step.Parallel), onError),
 		e.calculateProgress())
 
 	var wg sync.WaitGroup
 	results := make([]StepResult, len(step.Parallel))
 	var mu sync.Mutex
+	var firstError error
+	var cancelled bool
+
+	// Track used panes to coordinate agent selection
+	usedPanes := make(map[string]bool)
+	var panesMu sync.Mutex
 
 	for i, pStep := range step.Parallel {
 		wg.Add(1)
 		go func(idx int, ps Step) {
 			defer wg.Done()
 
-			pResult := e.executeStep(ctx, &ps, workflow)
+			// Check if already cancelled (fail_fast mode)
+			select {
+			case <-parallelCtx.Done():
+				mu.Lock()
+				results[idx] = StepResult{
+					StepID:     ps.ID,
+					Status:     StatusCancelled,
+					StartedAt:  time.Now(),
+					FinishedAt: time.Now(),
+					SkipReason: "cancelled due to parallel group failure",
+				}
+				e.stateMu.Lock()
+				e.state.Steps[ps.ID] = results[idx]
+				e.stateMu.Unlock()
+				mu.Unlock()
+				return
+			default:
+			}
+
+			// Execute the step with pane coordination
+			pResult := e.executeParallelStep(parallelCtx, &ps, workflow, usedPanes, &panesMu)
 
 			mu.Lock()
 			results[idx] = pResult
+			e.stateMu.Lock()
 			e.state.Steps[ps.ID] = pResult
+			e.stateMu.Unlock()
+
+			// Handle fail_fast: cancel remaining steps on first error
+			if pResult.Status == StatusFailed && onError == ErrorActionFailFast {
+				if firstError == nil {
+					firstError = fmt.Errorf("step %s failed", ps.ID)
+					cancelled = true
+					cancelParallel()
+				}
+			}
 			mu.Unlock()
 		}(i, pStep)
 	}
@@ -531,31 +592,46 @@ func (e *Executor) executeParallel(ctx context.Context, step *Step, workflow *Wo
 	// Aggregate results
 	completed := 0
 	failed := 0
+	cancelledCount := 0
 	for _, r := range results {
 		switch r.Status {
 		case StatusCompleted:
 			completed++
 		case StatusFailed:
 			failed++
+		case StatusCancelled:
+			cancelledCount++
 		}
 	}
 
 	result.FinishedAt = time.Now()
 
-	if failed > 0 {
-		// Determine failure handling
-		onError := step.OnError
-		if onError == "" {
-			onError = workflow.Settings.OnError
+	// Store parallel group outputs for variable access
+	// Results are accessible as ${steps.parallel_group.substep_id.output}
+	groupOutputs := make(map[string]interface{})
+	for _, r := range results {
+		groupOutputs[r.StepID] = map[string]interface{}{
+			"output":      r.Output,
+			"status":      string(r.Status),
+			"parsed_data": r.ParsedData,
 		}
-		if onError == "" {
-			onError = ErrorActionFail
-		}
+	}
+	result.ParsedData = groupOutputs
 
-		if onError == ErrorActionContinue {
+	// Determine final status based on error mode and results
+	if failed > 0 || cancelled {
+		switch onError {
+		case ErrorActionContinue:
 			result.Status = StatusCompleted
 			result.Output = fmt.Sprintf("Parallel group completed with %d/%d successful", completed, len(results))
-		} else {
+		case ErrorActionFailFast:
+			result.Status = StatusFailed
+			result.Error = &StepError{
+				Type:      "parallel_fail_fast",
+				Message:   fmt.Sprintf("%d failed, %d cancelled (fail_fast mode)", failed, cancelledCount),
+				Timestamp: time.Now(),
+			}
+		default: // ErrorActionFail
 			result.Status = StatusFailed
 			result.Error = &StepError{
 				Type:      "parallel",
@@ -563,12 +639,303 @@ func (e *Executor) executeParallel(ctx context.Context, step *Step, workflow *Wo
 				Timestamp: time.Now(),
 			}
 		}
+	} else if ctx.Err() == context.DeadlineExceeded {
+		result.Status = StatusFailed
+		result.Error = &StepError{
+			Type:      "parallel_timeout",
+			Message:   fmt.Sprintf("parallel group timed out after %s", step.Timeout.Duration),
+			Timestamp: time.Now(),
+		}
 	} else {
 		result.Status = StatusCompleted
 		result.Output = fmt.Sprintf("All %d parallel steps completed", len(results))
 	}
 
 	return result
+}
+
+// executeParallelStep executes a single step within a parallel group,
+// coordinating agent selection to avoid using the same agent for multiple parallel steps.
+func (e *Executor) executeParallelStep(ctx context.Context, step *Step, workflow *Workflow, usedPanes map[string]bool, panesMu *sync.Mutex) StepResult {
+	result := StepResult{
+		StepID:    step.ID,
+		Status:    StatusRunning,
+		StartedAt: time.Now(),
+	}
+
+	// Check context before starting
+	if ctx.Err() != nil {
+		result.Status = StatusCancelled
+		result.FinishedAt = time.Now()
+		result.SkipReason = "context cancelled"
+		return result
+	}
+
+	// Evaluate condition if present
+	if step.When != "" {
+		skip, err := e.evaluateCondition(step.When)
+		if err != nil {
+			result.Status = StatusFailed
+			result.Error = &StepError{
+				Type:      "condition",
+				Message:   fmt.Sprintf("condition evaluation failed: %v", err),
+				Timestamp: time.Now(),
+			}
+			result.FinishedAt = time.Now()
+			return result
+		}
+		if skip {
+			result.Status = StatusSkipped
+			result.SkipReason = fmt.Sprintf("condition '%s' evaluated to false", step.When)
+			result.FinishedAt = time.Now()
+			return result
+		}
+	}
+
+	// Select pane with coordination to avoid reusing agents
+	paneID, agentType, err := e.selectPaneExcluding(step, usedPanes, panesMu)
+	if err != nil {
+		result.Status = StatusFailed
+		result.Error = &StepError{
+			Type:      "routing",
+			Message:   fmt.Sprintf("failed to select agent: %v", err),
+			Timestamp: time.Now(),
+		}
+		result.FinishedAt = time.Now()
+		return result
+	}
+
+	result.PaneUsed = paneID
+	result.AgentType = agentType
+
+	// Mark pane as used for this parallel group
+	panesMu.Lock()
+	usedPanes[paneID] = true
+	panesMu.Unlock()
+
+	// Resolve and substitute prompt
+	prompt, err := e.resolvePrompt(step)
+	if err != nil {
+		result.Status = StatusFailed
+		result.Error = &StepError{
+			Type:      "prompt",
+			Message:   err.Error(),
+			Timestamp: time.Now(),
+		}
+		result.FinishedAt = time.Now()
+		return result
+	}
+
+	prompt = e.substituteVariables(prompt)
+
+	e.emitProgress("step_start", step.ID,
+		fmt.Sprintf("Sending to %s (parallel)", agentType),
+		e.calculateProgress())
+
+	// Dry run mode - don't actually execute
+	if e.config.DryRun {
+		result.Status = StatusCompleted
+		result.Output = "[DRY RUN] Would execute: " + truncatePrompt(prompt, 100)
+		result.FinishedAt = time.Now()
+		return result
+	}
+
+	// Capture state before sending
+	beforeOutput, _ := tmux.CapturePaneOutput(paneID, 2000)
+
+	// Send prompt
+	if err := tmux.PasteKeys(paneID, prompt, true); err != nil {
+		result.Status = StatusFailed
+		result.Error = &StepError{
+			Type:      "send",
+			Message:   fmt.Sprintf("failed to send prompt: %v", err),
+			Timestamp: time.Now(),
+		}
+		result.FinishedAt = time.Now()
+		return result
+	}
+
+	// Handle wait condition
+	waitCondition := step.Wait
+	if waitCondition == "" {
+		waitCondition = WaitCompletion
+	}
+
+	// Calculate step timeout
+	timeout := e.config.DefaultTimeout
+	if step.Timeout.Duration > 0 {
+		timeout = step.Timeout.Duration
+	}
+
+	switch waitCondition {
+	case WaitNone:
+		// Fire and forget
+		result.Status = StatusCompleted
+		result.FinishedAt = time.Now()
+		return result
+
+	case WaitTime:
+		// Just wait for timeout
+		select {
+		case <-ctx.Done():
+			result.Status = StatusCancelled
+			result.SkipReason = "context cancelled during wait"
+			result.FinishedAt = time.Now()
+			return result
+		case <-time.After(timeout):
+			result.Status = StatusCompleted
+			result.FinishedAt = time.Now()
+		}
+
+	case WaitCompletion, WaitIdle:
+		// Wait for agent to return to idle
+		if err := e.waitForIdle(ctx, paneID, timeout); err != nil {
+			if ctx.Err() != nil {
+				result.Status = StatusCancelled
+				result.SkipReason = "context cancelled during execution"
+			} else {
+				result.Status = StatusFailed
+				result.Error = &StepError{
+					Type:      "timeout",
+					Message:   fmt.Sprintf("timeout waiting for completion: %v", err),
+					Timestamp: time.Now(),
+				}
+			}
+			result.FinishedAt = time.Now()
+			return result
+		}
+	}
+
+	// Capture output
+	afterOutput, err := tmux.CapturePaneOutput(paneID, 2000)
+	if err != nil {
+		result.Status = StatusFailed
+		result.Error = &StepError{
+			Type:      "capture",
+			Message:   fmt.Sprintf("failed to capture output: %v", err),
+			Timestamp: time.Now(),
+		}
+		result.FinishedAt = time.Now()
+		return result
+	}
+
+	result.Output = extractNewOutput(beforeOutput, afterOutput)
+	result.Status = StatusCompleted
+	result.FinishedAt = time.Now()
+
+	// Parse output if configured
+	if step.OutputParse.Type != "" && step.OutputParse.Type != "none" {
+		parsed, err := e.parseOutput(result.Output, step.OutputParse)
+		if err != nil {
+			// Log parse error but don't fail the step
+			e.emitProgress("step_warning", step.ID,
+				fmt.Sprintf("output parse warning: %v", err),
+				e.calculateProgress())
+		} else {
+			result.ParsedData = parsed
+		}
+	}
+
+	// Store output in variable if specified
+	if step.OutputVar != "" {
+		e.state.Variables[step.OutputVar] = result.Output
+		if result.ParsedData != nil {
+			e.state.Variables[step.OutputVar+"_parsed"] = result.ParsedData
+		}
+	}
+
+	// Store step output for variable access
+	StoreStepOutput(e.state, step.ID, result.Output, result.ParsedData)
+
+	return result
+}
+
+// selectPaneExcluding selects a pane for a step, excluding panes already in use by the parallel group.
+// This ensures different agents are used for concurrent parallel steps.
+func (e *Executor) selectPaneExcluding(step *Step, usedPanes map[string]bool, panesMu *sync.Mutex) (paneID string, agentType string, err error) {
+	// In dry run mode, return dummy pane info
+	if e.config.DryRun {
+		return "dry-run-pane", "dry-run-agent", nil
+	}
+
+	// Explicit pane selection bypasses exclusion
+	if step.Pane > 0 {
+		panes, err := tmux.GetPanes(e.config.Session)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to get panes: %w", err)
+		}
+		for _, p := range panes {
+			if p.Index == step.Pane {
+				return p.ID, string(p.Type), nil
+			}
+		}
+		return "", "", fmt.Errorf("pane %d not found", step.Pane)
+	}
+
+	// Use ScoreAgents to get all scored agents
+	agents, err := e.scorer.ScoreAgents(e.config.Session, step.Prompt)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to score agents: %w", err)
+	}
+
+	// Filter by agent type if specified
+	if step.Agent != "" {
+		targetType := normalizeAgentType(step.Agent)
+		filtered := make([]robot.ScoredAgent, 0, len(agents))
+		for _, a := range agents {
+			if a.AgentType == targetType {
+				filtered = append(filtered, a)
+			}
+		}
+		agents = filtered
+	}
+
+	// Filter out excluded agents and already-used panes
+	panesMu.Lock()
+	available := make([]robot.ScoredAgent, 0, len(agents))
+	for _, a := range agents {
+		if !a.Excluded && !usedPanes[a.PaneID] {
+			available = append(available, a)
+		}
+	}
+	panesMu.Unlock()
+
+	// If all agents are used, allow reuse (fall back to original list minus excluded)
+	if len(available) == 0 {
+		for _, a := range agents {
+			if !a.Excluded {
+				available = append(available, a)
+			}
+		}
+	}
+
+	if len(available) == 0 {
+		return "", "", fmt.Errorf("no suitable agents found")
+	}
+
+	// Select routing strategy
+	strategy := robot.StrategyLeastLoaded
+	if step.Route != "" {
+		switch step.Route {
+		case RouteLeastLoaded:
+			strategy = robot.StrategyLeastLoaded
+		case RouteFirstAvailable:
+			strategy = robot.StrategyFirstAvailable
+		case RouteRoundRobin:
+			strategy = robot.StrategyRoundRobin
+		}
+	}
+
+	// Route to best agent
+	routeCtx := robot.RoutingContext{
+		Prompt: step.Prompt,
+	}
+	routeResult := e.router.Route(available, strategy, routeCtx)
+	if routeResult.Selected == nil {
+		return "", "", fmt.Errorf("routing failed: %s", routeResult.Reason)
+	}
+
+	return routeResult.Selected.PaneID, routeResult.Selected.AgentType, nil
 }
 
 // selectPane finds the appropriate pane for a step
@@ -748,12 +1115,14 @@ func (e *Executor) calculateProgress() float64 {
 	if total == 0 {
 		return 1.0
 	}
+	e.stateMu.RLock()
 	completed := 0
 	for _, result := range e.state.Steps {
 		if result.Status == StatusCompleted || result.Status == StatusFailed || result.Status == StatusSkipped {
 			completed++
 		}
 	}
+	e.stateMu.RUnlock()
 	return float64(completed) / float64(total)
 }
 
