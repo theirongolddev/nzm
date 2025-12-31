@@ -1083,6 +1083,80 @@ include_agents = ["claude", "codex", "gemini"]
 
 ---
 
+## Context Window Rotation
+
+NTM monitors context window usage for each AI agent and automatically rotates agents before they exhaust their context, ensuring uninterrupted workflows during long sessions.
+
+### How It Works
+
+1. **Monitoring**: Token usage is estimated using multiple strategies (message counts, cumulative tokens, session duration)
+2. **Warning**: When usage exceeds the warning threshold (default 80%), NTM alerts you
+3. **Compaction**: Before rotating, NTM tries to compact the context (using `/compact` for Claude or summarization prompts)
+4. **Rotation**: If compaction doesn't reduce usage enough, a fresh agent is spawned with a handoff summary
+
+### Configuration
+
+Context rotation is enabled by default. Configure in `~/.config/ntm/config.toml`:
+
+```toml
+[context_rotation]
+enabled = true              # Master toggle
+warning_threshold = 0.80    # Warn at 80% usage
+rotate_threshold = 0.95     # Rotate at 95% usage
+summary_max_tokens = 2000   # Max tokens for handoff summary
+min_session_age_sec = 300   # Don't rotate agents younger than 5 minutes
+try_compact_first = true    # Try compaction before rotation
+require_confirm = false     # Auto-rotate without confirmation
+```
+
+### Robot Mode Commands
+
+```bash
+ntm --robot-context=SESSION          # Get context usage for all agents
+ntm --robot-context=SESSION --json   # JSON output for automation
+```
+
+**Example output:**
+
+```json
+{
+  "success": true,
+  "session": "myproject",
+  "agents": [
+    {
+      "pane": "myproject__cc_1",
+      "estimated_tokens": 145000,
+      "context_limit": 200000,
+      "usage_percent": 72.5,
+      "usage_level": "Medium",
+      "needs_warning": false,
+      "needs_rotation": false
+    }
+  ]
+}
+```
+
+### Handoff Summary
+
+When an agent is rotated, the old agent is asked for a structured summary containing:
+- Current task being worked on
+- Progress made so far
+- Key decisions taken
+- Active files being modified
+- Any blockers or issues
+
+This summary is passed to the fresh agent so it can continue seamlessly.
+
+### Dashboard Integration
+
+The dashboard displays context usage for each agent pane:
+- **Green**: < 40% usage (plenty of room)
+- **Yellow**: 40-60% usage (comfortable)
+- **Orange**: 60-80% usage (approaching threshold)
+- **Red**: > 80% usage (warning/needs attention)
+
+---
+
 ## Agent Mail Integration
 
 NTM integrates with Agent Mail for multi-agent coordination across sessions and projects.
