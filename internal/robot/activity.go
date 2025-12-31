@@ -197,6 +197,13 @@ func (vt *VelocityTracker) lastOutputAgeLocked() time.Duration {
 		}
 	}
 
+	// No output in any sample - return time since OLDEST sample
+	// This approximates "how long we've been monitoring without seeing output"
+	// Note: This is limited by MaxSamples buffer size
+	if len(vt.Samples) > 0 {
+		return time.Since(vt.Samples[0].Timestamp)
+	}
+
 	return time.Since(vt.LastCaptureAt)
 }
 

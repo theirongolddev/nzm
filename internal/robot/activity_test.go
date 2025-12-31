@@ -195,6 +195,73 @@ func TestVelocityTracker_GetSamples(t *testing.T) {
 	}
 }
 
+func TestVelocityTracker_LastOutputAge(t *testing.T) {
+	tracker := NewVelocityTracker("test")
+
+	// Before any captures, should return 0
+	if age := tracker.LastOutputAge(); age != 0 {
+		t.Errorf("expected 0 age before captures, got %v", age)
+	}
+
+	// Add samples with no output (CharsAdded = 0)
+	oldTime := time.Now().Add(-5 * time.Second)
+	tracker.mu.Lock()
+	tracker.Samples = append(tracker.Samples, VelocitySample{
+		Timestamp:  oldTime,
+		CharsAdded: 0,
+		Velocity:   0,
+	})
+	tracker.LastCaptureAt = time.Now()
+	tracker.mu.Unlock()
+
+	// With no output, should return time since oldest sample (approx 5 seconds)
+	age := tracker.LastOutputAge()
+	if age < 4*time.Second || age > 6*time.Second {
+		t.Errorf("expected ~5s age with no output, got %v", age)
+	}
+
+	// Now add a sample with output
+	recentTime := time.Now().Add(-1 * time.Second)
+	tracker.mu.Lock()
+	tracker.Samples = append(tracker.Samples, VelocitySample{
+		Timestamp:  recentTime,
+		CharsAdded: 10,
+		Velocity:   5.0,
+	})
+	tracker.mu.Unlock()
+
+	// Should now return time since the sample with output (approx 1 second)
+	age = tracker.LastOutputAge()
+	if age > 2*time.Second {
+		t.Errorf("expected ~1s age after output, got %v", age)
+	}
+}
+
+func TestVelocityTracker_LastOutputTime(t *testing.T) {
+	tracker := NewVelocityTracker("test")
+
+	// Before any output, should return zero time
+	if lt := tracker.LastOutputTime(); !lt.IsZero() {
+		t.Errorf("expected zero time before output, got %v", lt)
+	}
+
+	// Add sample with output
+	outputTime := time.Now().Add(-2 * time.Second)
+	tracker.mu.Lock()
+	tracker.Samples = append(tracker.Samples, VelocitySample{
+		Timestamp:  outputTime,
+		CharsAdded: 10,
+		Velocity:   5.0,
+	})
+	tracker.mu.Unlock()
+
+	// Should return the timestamp of that sample
+	lt := tracker.LastOutputTime()
+	if lt != outputTime {
+		t.Errorf("expected %v, got %v", outputTime, lt)
+	}
+}
+
 func TestVelocityTracker_Reset(t *testing.T) {
 	tracker := NewVelocityTracker("test")
 
