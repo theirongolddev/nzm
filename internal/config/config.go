@@ -33,7 +33,8 @@ type Config struct {
 	CASS          CASSConfig        `toml:"cass"`         // CASS integration configuration
 	Accounts      AccountsConfig    `toml:"accounts"`     // Multi-account management
 	Rotation      RotationConfig    `toml:"rotation"`     // Account rotation configuration
-	GeminiSetup   GeminiSetupConfig `toml:"gemini_setup"` // Gemini post-spawn setup
+	GeminiSetup     GeminiSetupConfig     `toml:"gemini_setup"`     // Gemini post-spawn setup
+	ContextRotation ContextRotationConfig `toml:"context_rotation"` // Context window rotation
 
 	// Runtime-only fields (populated by project config merging)
 	ProjectDefaults map[string]int `toml:"-"`
@@ -306,6 +307,51 @@ type AgentConfig struct {
 	Claude string `toml:"claude"`
 	Codex  string `toml:"codex"`
 	Gemini string `toml:"gemini"`
+}
+
+// ContextRotationConfig holds configuration for automatic context window rotation
+type ContextRotationConfig struct {
+	Enabled          bool    `toml:"enabled"`            // Master toggle for context rotation
+	WarningThreshold float64 `toml:"warning_threshold"`  // 0.0-1.0, warn when context usage exceeds this
+	RotateThreshold  float64 `toml:"rotate_threshold"`   // 0.0-1.0, rotate agent when usage exceeds this
+	SummaryMaxTokens int     `toml:"summary_max_tokens"` // Max tokens for handoff summary
+	MinSessionAgeSec int     `toml:"min_session_age_sec"` // Don't rotate agents younger than this
+	TryCompactFirst  bool    `toml:"try_compact_first"`  // Try to compact before rotating
+	RequireConfirm   bool    `toml:"require_confirm"`    // Require user confirmation before rotating
+}
+
+// DefaultContextRotationConfig returns sensible defaults for context rotation
+func DefaultContextRotationConfig() ContextRotationConfig {
+	return ContextRotationConfig{
+		Enabled:          true,
+		WarningThreshold: 0.80, // Warn at 80%
+		RotateThreshold:  0.95, // Rotate at 95%
+		SummaryMaxTokens: 2000, // 2000 tokens for handoff summary
+		MinSessionAgeSec: 300,  // 5 minutes minimum session age
+		TryCompactFirst:  true, // Try compaction before rotation
+		RequireConfirm:   false, // Don't require confirmation by default
+	}
+}
+
+// ValidateContextRotationConfig validates the context rotation configuration
+func ValidateContextRotationConfig(cfg *ContextRotationConfig) error {
+	if cfg.WarningThreshold < 0.0 || cfg.WarningThreshold > 1.0 {
+		return fmt.Errorf("warning_threshold must be between 0.0 and 1.0, got %f", cfg.WarningThreshold)
+	}
+	if cfg.RotateThreshold < 0.0 || cfg.RotateThreshold > 1.0 {
+		return fmt.Errorf("rotate_threshold must be between 0.0 and 1.0, got %f", cfg.RotateThreshold)
+	}
+	if cfg.WarningThreshold >= cfg.RotateThreshold {
+		return fmt.Errorf("warning_threshold (%f) must be less than rotate_threshold (%f)",
+			cfg.WarningThreshold, cfg.RotateThreshold)
+	}
+	if cfg.SummaryMaxTokens < 500 || cfg.SummaryMaxTokens > 10000 {
+		return fmt.Errorf("summary_max_tokens must be between 500 and 10000, got %d", cfg.SummaryMaxTokens)
+	}
+	if cfg.MinSessionAgeSec < 0 {
+		return fmt.Errorf("min_session_age_sec must be non-negative, got %d", cfg.MinSessionAgeSec)
+	}
+	return nil
 }
 
 // GeminiSetupConfig holds configuration for Gemini post-spawn setup.
@@ -628,8 +674,9 @@ func Default() *Config {
 		Scanner:       DefaultScannerConfig(),
 		CASS:          DefaultCASSConfig(),
 		Accounts:      DefaultAccountsConfig(),
-		Rotation:      DefaultRotationConfig(),
-		GeminiSetup:   DefaultGeminiSetupConfig(),
+		Rotation:        DefaultRotationConfig(),
+		GeminiSetup:     DefaultGeminiSetupConfig(),
+		ContextRotation: DefaultContextRotationConfig(),
 	}
 
 	// Try to load palette from markdown file
@@ -1266,6 +1313,19 @@ func Print(cfg *Config, w io.Writer) error {
 	fmt.Fprintf(w, "ready_timeout_seconds = %d       # Seconds to wait for Gemini CLI to be ready\n", cfg.GeminiSetup.ReadyTimeoutSeconds)
 	fmt.Fprintf(w, "model_select_timeout_seconds = %d # Seconds to wait for model selection menu\n", cfg.GeminiSetup.ModelSelectTimeoutSeconds)
 	fmt.Fprintf(w, "verbose = %t                     # Show debug output during setup\n", cfg.GeminiSetup.Verbose)
+	fmt.Fprintln(w)
+
+	// Write context rotation configuration
+	fmt.Fprintln(w, "[context_rotation]")
+	fmt.Fprintln(w, "# Context window rotation configuration")
+	fmt.Fprintln(w, "# Monitors agent context usage and rotates before exhaustion")
+	fmt.Fprintf(w, "enabled = %t                    # Master toggle for context rotation\n", cfg.ContextRotation.Enabled)
+	fmt.Fprintf(w, "warning_threshold = %.2f        # Warn when context usage exceeds this (0.0-1.0)\n", cfg.ContextRotation.WarningThreshold)
+	fmt.Fprintf(w, "rotate_threshold = %.2f         # Rotate agent when usage exceeds this (0.0-1.0)\n", cfg.ContextRotation.RotateThreshold)
+	fmt.Fprintf(w, "summary_max_tokens = %d        # Max tokens for handoff summary\n", cfg.ContextRotation.SummaryMaxTokens)
+	fmt.Fprintf(w, "min_session_age_sec = %d        # Don't rotate agents younger than this\n", cfg.ContextRotation.MinSessionAgeSec)
+	fmt.Fprintf(w, "try_compact_first = %t         # Try to compact before rotating\n", cfg.ContextRotation.TryCompactFirst)
+	fmt.Fprintf(w, "require_confirm = %t           # Require user confirmation before rotating\n", cfg.ContextRotation.RequireConfirm)
 	fmt.Fprintln(w)
 
 	fmt.Fprintln(w, "# Command Palette entries")
