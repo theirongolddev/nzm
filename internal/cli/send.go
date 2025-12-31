@@ -551,6 +551,13 @@ func runSendInternal(opts SendOptions) error {
 	}
 
 	// Smart routing: select best agent automatically
+	// Skip if --panes was explicitly specified (explicit > automatic)
+	if opts.SmartRoute && paneIndex >= 0 {
+		if !jsonOutput {
+			fmt.Println("Note: --panes specified, skipping smart routing")
+		}
+		opts.SmartRoute = false
+	}
 	if opts.SmartRoute {
 		strategy := robot.StrategyLeastLoaded
 		if opts.RouteStrategy != "" {
@@ -738,6 +745,7 @@ func runSendInternal(opts SendOptions) error {
 							Targets:       targetPanes,
 							Delivered:     delivered,
 							Failed:        failed,
+							RoutedTo:      opts.routingResult,
 							Error:         err.Error(),
 						}
 						return json.NewEncoder(os.Stdout).Encode(result)
@@ -755,6 +763,7 @@ func runSendInternal(opts SendOptions) error {
 						Targets:       targetPanes,
 						Delivered:     delivered,
 						Failed:        failed,
+						RoutedTo:      opts.routingResult,
 					}
 					return json.NewEncoder(os.Stdout).Encode(result)
 				}
