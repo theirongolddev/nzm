@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -584,6 +585,10 @@ func spawnSessionLogic(opts SpawnOptions) error {
 	// Track agent index for stagger calculation (0-based, regardless of user pane)
 	staggerAgentIdx := 0
 
+	// WaitGroup for staggered prompt delivery - ensures all prompts are sent before returning
+	var staggerWg sync.WaitGroup
+	var maxStaggerDelay time.Duration
+
 	// Resolve CASS context if enabled
 	var cassContext string
 	if !opts.NoCassContext && cfg.CASS.Context.Enabled {
@@ -770,16 +775,21 @@ func spawnSessionLogic(opts SpawnOptions) error {
 		var promptDelay time.Duration
 		if opts.StaggerEnabled && opts.Stagger > 0 {
 			promptDelay = time.Duration(staggerAgentIdx) * opts.Stagger
+			if promptDelay > maxStaggerDelay {
+				maxStaggerDelay = promptDelay
+			}
 		}
 
 		// Inject user prompt if provided
 		if opts.Prompt != "" {
 			if promptDelay > 0 {
-				// Staggered delivery: schedule for later
+				// Staggered delivery: schedule for later using WaitGroup
 				paneID := pane.ID
 				prompt := opts.Prompt
 				delay := promptDelay
+				staggerWg.Add(1)
 				go func() {
+					defer staggerWg.Done()
 					time.Sleep(delay)
 					if err := tmux.SendKeys(paneID, prompt, true); err != nil {
 						// Log error but don't fail - agent is already running
@@ -821,6 +831,17 @@ func spawnSessionLogic(opts SpawnOptions) error {
 	// Complete the launching step
 	if !IsJSONOutput() {
 		steps.Done()
+	}
+
+	// Wait for staggered prompt delivery to complete
+	if maxStaggerDelay > 0 {
+		if !IsJSONOutput() {
+			fmt.Printf("⏳ Waiting for staggered prompts (max %v)...\n", maxStaggerDelay)
+		}
+		staggerWg.Wait()
+		if !IsJSONOutput() {
+			fmt.Println("✓ All staggered prompts delivered")
+		}
 	}
 
 	// Get final pane list for output
