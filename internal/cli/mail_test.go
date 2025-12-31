@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/agentmail"
+	"github.com/Dicklesworthstone/ntm/internal/startup"
 )
 
 type mailStub struct {
@@ -176,6 +177,9 @@ func toString(v interface{}) string {
 func execCommand(t *testing.T, args ...string) (string, error) {
 	t.Helper()
 	resetFlags()
+	// Reset startup config cache so AGENT_MAIL_URL env var is picked up
+	// when config is re-loaded during command execution.
+	startup.ResetConfig()
 	rootCmd.SetArgs(args)
 	var buf bytes.Buffer
 	rootCmd.SetOut(&buf)
