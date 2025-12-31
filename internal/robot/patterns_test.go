@@ -774,26 +774,25 @@ func TestPatternLibraryAddPatternSorting(t *testing.T) {
 	}
 }
 
-func TestPatternLibraryAddPatternPrecompiled(t *testing.T) {
+func TestPatternLibraryAddPatternUncompiled(t *testing.T) {
 	t.Parallel()
 
 	lib := NewPatternLibrary()
 	initialCount := lib.PatternCount()
 
-	// Add pattern with already compiled regex
-	compiled := Pattern{
-		Name:     "precompiled",
-		RegexStr: `precompiled_test`,
+	// Add pattern without pre-compiled Regex (the normal case)
+	// AddPattern will compile the RegexStr for us
+	newPattern := Pattern{
+		Name:     "uncompiled",
+		RegexStr: `uncompiled_test`,
 		Agent:    "*",
 		State:    StateWaiting,
 		Priority: 50,
 	}
-	// Pre-compile
-	compiled.Regex = nil // Will be compiled by AddPattern
 
-	err := lib.AddPattern(compiled)
+	err := lib.AddPattern(newPattern)
 	if err != nil {
-		t.Fatalf("AddPattern with uncompiled pattern failed: %v", err)
+		t.Fatalf("AddPattern failed: %v", err)
 	}
 
 	if lib.PatternCount() != initialCount+1 {
