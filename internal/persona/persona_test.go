@@ -526,3 +526,488 @@ Custom: {{custom_key}}`
 		t.Error("expected custom_key expansion")
 	}
 }
+
+func TestExpandPromptVarsWithNils(t *testing.T) {
+	// Test with nil persona and nil context
+	content := "Hello {{.Name}}"
+	result := ExpandPromptVarsWithContext(content, nil, nil)
+	if result != content {
+		t.Errorf("expected unchanged content with nil inputs, got %q", result)
+	}
+
+	// Test with nil context only
+	p := &Persona{Name: "test", AgentType: "claude"}
+	result = ExpandPromptVarsWithContext("Hello {{.Name}}", p, nil)
+	if result != "Hello test" {
+		t.Errorf("expected 'Hello test', got %q", result)
+	}
+}
+
+func TestPrepareSystemPrompt(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Test with nil persona
+	path, err := PrepareSystemPrompt(nil, tmpDir)
+	if err != nil {
+		t.Errorf("unexpected error for nil persona: %v", err)
+	}
+	if path != "" {
+		t.Error("expected empty path for nil persona")
+	}
+
+	// Test with empty system prompt
+	p := &Persona{Name: "test", AgentType: "claude", SystemPrompt: ""}
+	path, err = PrepareSystemPrompt(p, tmpDir)
+	if err != nil {
+		t.Errorf("unexpected error for empty prompt: %v", err)
+	}
+	if path != "" {
+		t.Error("expected empty path for empty system prompt")
+	}
+
+	// Test with valid system prompt
+	p = &Persona{
+		Name:         "architect",
+		AgentType:    "claude",
+		SystemPrompt: "You are an architect for {{project_name}}.",
+	}
+	path, err = PrepareSystemPrompt(p, tmpDir)
+	if err != nil {
+		t.Fatalf("PrepareSystemPrompt failed: %v", err)
+	}
+	if path == "" {
+		t.Fatal("expected non-empty path")
+	}
+
+	// Verify file was created
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		t.Error("prompt file was not created")
+	}
+
+	// Verify content
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read prompt file: %v", err)
+	}
+	if !strings.Contains(string(data), "You are an architect") {
+		t.Error("expected system prompt content in file")
+	}
+}
+
+func TestPrepareSystemPromptWithContextFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a context file
+	contextDir := filepath.Join(tmpDir, "docs")
+	if err := os.MkdirAll(contextDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	contextFile := filepath.Join(contextDir, "README.md")
+	if err := os.WriteFile(contextFile, []byte("# Project README"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	p := &Persona{
+		Name:         "test",
+		AgentType:    "claude",
+		SystemPrompt: "You are a test agent.",
+		ContextFiles: []string{"docs/*.md"},
+	}
+
+	path, err := PrepareSystemPrompt(p, tmpDir)
+	if err != nil {
+		t.Fatalf("PrepareSystemPrompt failed: %v", err)
+	}
+
+	// Verify content includes context files
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read prompt file: %v", err)
+	}
+	content := string(data)
+	if !strings.Contains(content, "Project README") {
+		t.Error("expected context file content in prompt")
+	}
+	if !strings.Contains(content, "You are a test agent") {
+		t.Error("expected system prompt in output")
+	}
+}
+
+func TestPrepareContextFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Test with nil persona
+	result, err := PrepareContextFiles(nil, tmpDir)
+	if err != nil {
+		t.Errorf("unexpected error for nil persona: %v", err)
+	}
+	if result != "" {
+		t.Error("expected empty result for nil persona")
+	}
+
+	// Test with empty context files
+	p := &Persona{Name: "test", AgentType: "claude"}
+	result, err = PrepareContextFiles(p, tmpDir)
+	if err != nil {
+		t.Errorf("unexpected error for empty context files: %v", err)
+	}
+	if result != "" {
+		t.Error("expected empty result for empty context files")
+	}
+
+	// Test with no matching files
+	p = &Persona{
+		Name:         "test",
+		AgentType:    "claude",
+		ContextFiles: []string{"nonexistent/*.xyz"},
+	}
+	result, err = PrepareContextFiles(p, tmpDir)
+	if err != nil {
+		t.Errorf("unexpected error for non-matching glob: %v", err)
+	}
+	if result != "" {
+		t.Error("expected empty result for non-matching glob")
+	}
+
+	// Create test files
+	if err := os.WriteFile(filepath.Join(tmpDir, "file1.txt"), []byte("Content 1"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "file2.txt"), []byte("Content 2"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Test with matching files
+	p = &Persona{
+		Name:         "test",
+		AgentType:    "claude",
+		ContextFiles: []string{"*.txt"},
+	}
+	result, err = PrepareContextFiles(p, tmpDir)
+	if err != nil {
+		t.Fatalf("PrepareContextFiles failed: %v", err)
+	}
+	if !strings.Contains(result, "Content 1") || !strings.Contains(result, "Content 2") {
+		t.Error("expected both file contents in result")
+	}
+	if !strings.Contains(result, "# Context Files") {
+		t.Error("expected Context Files header")
+	}
+}
+
+func TestCleanupPromptFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Test cleanup when directory doesn't exist
+	err := CleanupPromptFiles(tmpDir)
+	if err != nil {
+		t.Errorf("unexpected error for non-existent prompts dir: %v", err)
+	}
+
+	// Create prompts directory and files
+	promptsDir := filepath.Join(tmpDir, ".ntm", "prompts")
+	if err := os.MkdirAll(promptsDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	promptFile := filepath.Join(promptsDir, "test.md")
+	if err := os.WriteFile(promptFile, []byte("test prompt"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify file exists
+	if _, err := os.Stat(promptFile); os.IsNotExist(err) {
+		t.Fatal("prompt file should exist before cleanup")
+	}
+
+	// Cleanup
+	err = CleanupPromptFiles(tmpDir)
+	if err != nil {
+		t.Fatalf("CleanupPromptFiles failed: %v", err)
+	}
+
+	// Verify directory is removed
+	if _, err := os.Stat(promptsDir); !os.IsNotExist(err) {
+		t.Error("prompts directory should be removed after cleanup")
+	}
+}
+
+func TestGetGitRepoName(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Test with no git directory
+	result := getGitRepoName(tmpDir)
+	if result != "" {
+		t.Errorf("expected empty result for non-git dir, got %q", result)
+	}
+
+	// Create git directory with config
+	gitDir := filepath.Join(tmpDir, ".git")
+	if err := os.MkdirAll(gitDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Test with HTTPS URL
+	gitConfig := `[core]
+	repositoryformatversion = 0
+[remote "origin"]
+	url = https://github.com/user/myrepo.git
+	fetch = +refs/heads/*:refs/remotes/origin/*
+`
+	if err := os.WriteFile(filepath.Join(gitDir, "config"), []byte(gitConfig), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result = getGitRepoName(tmpDir)
+	if result != "myrepo" {
+		t.Errorf("expected 'myrepo', got %q", result)
+	}
+
+	// Test with SSH URL
+	gitConfigSSH := `[core]
+	repositoryformatversion = 0
+[remote "origin"]
+	url = git@github.com:user/sshrepo.git
+	fetch = +refs/heads/*:refs/remotes/origin/*
+`
+	if err := os.WriteFile(filepath.Join(gitDir, "config"), []byte(gitConfigSSH), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result = getGitRepoName(tmpDir)
+	if result != "sshrepo" {
+		t.Errorf("expected 'sshrepo', got %q", result)
+	}
+
+	// Test with no origin remote
+	gitConfigNoOrigin := `[core]
+	repositoryformatversion = 0
+[remote "upstream"]
+	url = https://github.com/other/repo.git
+`
+	if err := os.WriteFile(filepath.Join(gitDir, "config"), []byte(gitConfigNoOrigin), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result = getGitRepoName(tmpDir)
+	if result != "" {
+		t.Errorf("expected empty for no origin, got %q", result)
+	}
+}
+
+func TestLoadCustomVars(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create .ntm directory
+	ntmDir := filepath.Join(tmpDir, ".ntm")
+	if err := os.MkdirAll(ntmDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Test with no config file
+	ctx := DefaultTemplateContext()
+	loadCustomVars(tmpDir, ctx)
+	if len(ctx.CustomVars) != 0 {
+		t.Error("expected empty custom vars when no config")
+	}
+
+	// Create config with template_vars section
+	configContent := `[general]
+some_setting = true
+
+[template_vars]
+project_name = "CustomProject"
+language = "Rust"
+codebase_summary = "A custom project"
+custom_var = "custom_value"
+quoted_var = "with quotes"
+
+[other_section]
+ignored = "yes"
+`
+	if err := os.WriteFile(filepath.Join(ntmDir, "config.toml"), []byte(configContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx = DefaultTemplateContext()
+	loadCustomVars(tmpDir, ctx)
+
+	if ctx.ProjectName != "CustomProject" {
+		t.Errorf("expected project_name 'CustomProject', got %q", ctx.ProjectName)
+	}
+	if ctx.Language != "Rust" {
+		t.Errorf("expected language 'Rust', got %q", ctx.Language)
+	}
+	if ctx.CodebaseSummary != "A custom project" {
+		t.Errorf("expected codebase_summary 'A custom project', got %q", ctx.CodebaseSummary)
+	}
+	if ctx.CustomVars["custom_var"] != "custom_value" {
+		t.Errorf("expected custom_var 'custom_value', got %q", ctx.CustomVars["custom_var"])
+	}
+	if ctx.CustomVars["quoted_var"] != "with quotes" {
+		t.Errorf("expected quoted_var 'with quotes', got %q", ctx.CustomVars["quoted_var"])
+	}
+}
+
+func TestDetectPrimaryLanguage(t *testing.T) {
+	tests := []struct {
+		file     string
+		expected string
+	}{
+		{"go.mod", "Go"},
+		{"Cargo.toml", "Rust"},
+		{"package.json", "JavaScript/TypeScript"},
+		{"requirements.txt", "Python"},
+		{"pyproject.toml", "Python"},
+		{"Gemfile", "Ruby"},
+		{"pom.xml", "Java"},
+		{"build.gradle", "Java/Kotlin"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.file, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(tmpDir, tt.file), []byte(""), 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			result := detectPrimaryLanguage(tmpDir)
+			if result != tt.expected {
+				t.Errorf("expected %q for %s, got %q", tt.expected, tt.file, result)
+			}
+		})
+	}
+
+	// Test with no language files
+	tmpDir := t.TempDir()
+	result := detectPrimaryLanguage(tmpDir)
+	if result != "" {
+		t.Errorf("expected empty for no language files, got %q", result)
+	}
+}
+
+func TestDefaultUserPath(t *testing.T) {
+	// Save original env vars
+	origNTMConfig := os.Getenv("NTM_CONFIG")
+	origXDG := os.Getenv("XDG_CONFIG_HOME")
+	defer func() {
+		os.Setenv("NTM_CONFIG", origNTMConfig)
+		os.Setenv("XDG_CONFIG_HOME", origXDG)
+	}()
+
+	// Test with NTM_CONFIG set
+	os.Setenv("NTM_CONFIG", "/custom/path/config.toml")
+	os.Setenv("XDG_CONFIG_HOME", "")
+	path := DefaultUserPath()
+	if path != "/custom/path/personas.toml" {
+		t.Errorf("expected '/custom/path/personas.toml', got %q", path)
+	}
+
+	// Test with XDG_CONFIG_HOME set
+	os.Setenv("NTM_CONFIG", "")
+	os.Setenv("XDG_CONFIG_HOME", "/xdg/config")
+	path = DefaultUserPath()
+	if path != "/xdg/config/ntm/personas.toml" {
+		t.Errorf("expected '/xdg/config/ntm/personas.toml', got %q", path)
+	}
+
+	// Test with neither set (falls back to ~/.config/ntm)
+	os.Setenv("NTM_CONFIG", "")
+	os.Setenv("XDG_CONFIG_HOME", "")
+	path = DefaultUserPath()
+	if !strings.HasSuffix(path, ".config/ntm/personas.toml") {
+		t.Errorf("expected path ending with '.config/ntm/personas.toml', got %q", path)
+	}
+}
+
+func TestMergePersonasEdgeCases(t *testing.T) {
+	// Test merging with all fields populated in parent
+	parent := &Persona{
+		Name:          "parent",
+		Description:   "Parent description",
+		AgentType:     "claude",
+		Model:         "opus",
+		SystemPrompt:  "Parent prompt",
+		Temperature:   ptrFloat64(0.7),
+		ContextFiles:  []string{"parent/*.md"},
+		Tags:          []string{"parent-tag"},
+		FocusPatterns: []string{"parent/**"},
+	}
+
+	// Child with minimal fields
+	child := &Persona{
+		Name:    "child",
+		Extends: "parent",
+	}
+
+	// Note: mergePersonas is not exported, so we test through ResolveInheritance
+	r := NewRegistry()
+	r.Add(parent)
+	r.Add(child)
+
+	if err := r.ResolveInheritance(); err != nil {
+		t.Fatalf("ResolveInheritance failed: %v", err)
+	}
+
+	resolved, ok := r.Get("child")
+	if !ok {
+		t.Fatal("expected to find child")
+	}
+
+	// Check inherited fields
+	if resolved.Description != "Parent description" {
+		t.Errorf("expected inherited description, got %q", resolved.Description)
+	}
+	if resolved.AgentType != "claude" {
+		t.Errorf("expected inherited agent_type, got %q", resolved.AgentType)
+	}
+	if resolved.Model != "opus" {
+		t.Errorf("expected inherited model, got %q", resolved.Model)
+	}
+	if resolved.SystemPrompt != "Parent prompt" {
+		t.Errorf("expected inherited system_prompt, got %q", resolved.SystemPrompt)
+	}
+	if resolved.Temperature == nil || *resolved.Temperature != 0.7 {
+		t.Error("expected inherited temperature 0.7")
+	}
+	if len(resolved.ContextFiles) != 1 || resolved.ContextFiles[0] != "parent/*.md" {
+		t.Errorf("expected inherited context_files, got %v", resolved.ContextFiles)
+	}
+	if len(resolved.FocusPatterns) != 1 || resolved.FocusPatterns[0] != "parent/**" {
+		t.Errorf("expected inherited focus_patterns, got %v", resolved.FocusPatterns)
+	}
+}
+
+func TestLoadFromFileInvalidToml(t *testing.T) {
+	tmpDir := t.TempDir()
+	badFile := filepath.Join(tmpDir, "bad.toml")
+
+	// Write invalid TOML
+	if err := os.WriteFile(badFile, []byte("this is not valid toml [[["), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := LoadFromFile(badFile)
+	if err == nil {
+		t.Error("expected error for invalid TOML")
+	}
+}
+
+func TestLoadFromFileInvalidPersona(t *testing.T) {
+	tmpDir := t.TempDir()
+	personasFile := filepath.Join(tmpDir, "personas.toml")
+
+	// Write valid TOML but invalid persona (missing required fields)
+	content := `
+[[personas]]
+name = "incomplete"
+# Missing agent_type
+`
+	if err := os.WriteFile(personasFile, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := LoadFromFile(personasFile)
+	if err == nil {
+		t.Error("expected error for invalid persona")
+	}
+}
