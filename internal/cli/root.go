@@ -308,6 +308,22 @@ Shell Integration:
 			exitCode := robot.PrintWait(opts)
 			os.Exit(exitCode)
 		}
+		if robotRoute != "" {
+			// Parse exclude panes
+			excludePanes, err := robot.ParseExcludePanes(robotRouteExclude)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(2)
+			}
+			opts := robot.RouteOptions{
+				Session:      robotRoute,
+				Strategy:     robot.StrategyName(robotRouteStrategy),
+				AgentType:    robotRouteType,
+				ExcludePanes: excludePanes,
+			}
+			exitCode := robot.PrintRoute(opts)
+			os.Exit(exitCode)
+		}
 		if robotTail != "" {
 			// Parse pane filter
 			var paneFilter []string
@@ -710,6 +726,12 @@ var (
 	robotWaitType    string // filter by agent type
 	robotWaitAny     bool   // wait for ANY agent (vs ALL)
 	robotWaitOnError bool   // exit immediately on error state
+
+	// Robot-route flags for routing recommendations
+	robotRoute         string // session name for route
+	robotRouteStrategy string // routing strategy (least-loaded, first-available, round-robin, etc.)
+	robotRouteType     string // filter by agent type (claude, codex, gemini)
+	robotRouteExclude  string // comma-separated pane indices to exclude
 )
 
 func init() {
@@ -846,6 +868,12 @@ func init() {
 	rootCmd.Flags().StringVar(&robotWaitType, "wait-type", "", "Filter by agent type: claude, codex, gemini. Optional with --robot-wait. Example: --wait-type=claude")
 	rootCmd.Flags().BoolVar(&robotWaitAny, "wait-any", false, "Wait for ANY agent instead of ALL. Optional with --robot-wait")
 	rootCmd.Flags().BoolVar(&robotWaitOnError, "wait-exit-on-error", false, "Exit immediately if ERROR state detected. Optional with --robot-wait")
+
+	// Robot-route flags for routing recommendations
+	rootCmd.Flags().StringVar(&robotRoute, "robot-route", "", "Get routing recommendation. Required: SESSION. Example: ntm --robot-route=myproject --route-strategy=least-loaded")
+	rootCmd.Flags().StringVar(&robotRouteStrategy, "route-strategy", "least-loaded", "Routing strategy: least-loaded, first-available, round-robin, round-robin-available, random, sticky, explicit. Optional with --robot-route")
+	rootCmd.Flags().StringVar(&robotRouteType, "route-type", "", "Filter by agent type: claude, codex, gemini. Optional with --robot-route. Example: --route-type=claude")
+	rootCmd.Flags().StringVar(&robotRouteExclude, "route-exclude", "", "Exclude pane indices (comma-separated). Optional with --robot-route. Example: --route-exclude=0,3")
 
 	// Sync version info with robot package
 	robot.Version = Version
