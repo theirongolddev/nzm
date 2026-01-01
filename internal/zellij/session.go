@@ -132,13 +132,17 @@ func (c *Client) AttachSession(ctx context.Context, name string) error {
 
 // CreateSession creates a new session with a layout
 func (c *Client) CreateSession(ctx context.Context, name, layoutPath string) error {
-	return c.RunSilent(ctx, "--session", name, "--layout", layoutPath)
+	// Use -n (--new-session-with-layout) to always create new session
+	// even when called from inside an existing Zellij session
+	return c.RunSilent(ctx, "-s", name, "-n", layoutPath)
 }
 
 // CreateSessionDetached creates a new session in the background.
 // Zellij doesn't have a --detached flag, so we start the process in background.
 func (c *Client) CreateSessionDetached(ctx context.Context, name, layoutPath string) error {
-	cmd := exec.CommandContext(ctx, "zellij", "--session", name, "--layout", layoutPath)
+	// Use -s (session name) and -n (new-session-with-layout) flags
+	// -n ensures new session is created even from inside existing Zellij session
+	cmd := exec.CommandContext(ctx, "zellij", "-s", name, "-n", layoutPath)
 	// Detach from terminal and process group
 	cmd.Stdin = nil
 	cmd.Stdout = nil
