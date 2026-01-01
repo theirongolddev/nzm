@@ -1,5 +1,6 @@
 # Binaries (only at root, not cmd/ntm/)
 /ntm
+/nzm
 *.exe
 dist/
 
@@ -38,3 +39,7 @@ internal/cli/outputs/
 
 # Continuous Claude cache
 .claude/cache/
+
+# Rust plugin build artifacts
+plugin/*/target/
+plugin/*/Cargo.lock
