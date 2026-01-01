@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/nzm"
+	"github.com/Dicklesworthstone/ntm/internal/output"
 	"github.com/Dicklesworthstone/ntm/internal/zellij"
 	"github.com/spf13/cobra"
 )
@@ -66,5 +67,23 @@ func runSend(cmd *cobra.Command, args []string) error {
 		Interrupt: sendInterrupt,
 	}
 
-	return sender.Send(ctx, opts)
+	if err := sender.Send(ctx, opts); err != nil {
+		return err
+	}
+
+	formatter := output.NZMDefaultFormatter(jsonFlag)
+	if formatter.IsJSON() {
+		return formatter.JSON(map[string]interface{}{
+			"action":    "send",
+			"session":   session,
+			"target":    target,
+			"text":      text,
+			"enter":     sendEnter,
+			"interrupt": sendInterrupt,
+			"success":   true,
+		})
+	}
+
+	// Silent success for text output (like echo)
+	return nil
 }

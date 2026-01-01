@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/nzm"
+	"github.com/Dicklesworthstone/ntm/internal/output"
 	"github.com/Dicklesworthstone/ntm/internal/zellij"
 	"github.com/spf13/cobra"
 )
@@ -69,23 +70,62 @@ func runSpawn(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	// Use config defaults if flags not set
+	workDir := spawnWorkDir
+	if workDir == "" && cfg != nil {
+		workDir = cfg.GetProjectDir(session)
+	}
+
+	pluginPath := spawnPluginPath
+	if pluginPath == "" && cfg != nil {
+		pluginPath = cfg.Zellij.PluginPath
+	}
+
+	claudeCmd := spawnClaudeCmd
+	if claudeCmd == "" && cfg != nil {
+		claudeCmd = cfg.Agents.Claude
+	}
+
+	codCmd := spawnCodCmd
+	if codCmd == "" && cfg != nil {
+		codCmd = cfg.Agents.Codex
+	}
+
+	gmiCmd := spawnGmiCmd
+	if gmiCmd == "" && cfg != nil {
+		gmiCmd = cfg.Agents.Gemini
+	}
+
 	opts := nzm.SpawnOptions{
 		Session:     session,
-		WorkDir:     spawnWorkDir,
-		PluginPath:  spawnPluginPath,
+		WorkDir:     workDir,
+		PluginPath:  pluginPath,
 		CCCount:     spawnCCCount,
 		CodCount:    spawnCodCount,
 		GmiCount:    spawnGmiCount,
 		IncludeUser: spawnIncludeUser,
-		ClaudeCmd:   spawnClaudeCmd,
-		CodCmd:      spawnCodCmd,
-		GmiCmd:      spawnGmiCmd,
+		ClaudeCmd:   claudeCmd,
+		CodCmd:      codCmd,
+		GmiCmd:      gmiCmd,
 		Detached:    spawnDetached,
 	}
 
 	result, err := spawner.Spawn(ctx, opts)
 	if err != nil {
 		return err
+	}
+
+	// Output formatting
+	formatter := output.NZMDefaultFormatter(jsonFlag)
+
+	if formatter.IsJSON() {
+		return formatter.JSON(map[string]interface{}{
+			"session":    result.Session,
+			"pane_count": result.PaneCount,
+			"layout":     result.LayoutPath,
+			"workdir":    result.WorkDir,
+			"detached":   spawnDetached,
+		})
 	}
 
 	if spawnDetached {

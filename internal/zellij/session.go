@@ -91,6 +91,61 @@ func (c *Client) CreateSessionDetached(ctx context.Context, name, layoutPath str
 	return c.RunSilent(ctx, "--session", name, "--layout", layoutPath, "--detached")
 }
 
+// EnsureInstalled returns an error if zellij is not installed
+func (c *Client) EnsureInstalled() error {
+	if !c.IsInstalled() {
+		return fmt.Errorf("zellij is not installed. Install it with: cargo install zellij")
+	}
+	return nil
+}
+
+// GetPanesEnriched returns all panes in a session with full agent metadata
+func (c *Client) GetPanesEnriched(ctx context.Context, session string) ([]Pane, error) {
+	paneInfos, err := c.ListPanes(ctx, session)
+	if err != nil {
+		return nil, err
+	}
+
+	panes := make([]Pane, len(paneInfos))
+	for i, info := range paneInfos {
+		panes[i] = ConvertPaneInfo(info)
+	}
+	return panes, nil
+}
+
+// SetPaneTitle sets the title of a pane via the plugin
+func (c *Client) SetPaneTitle(ctx context.Context, session string, paneID uint32, title string) error {
+	resp, err := c.SendPluginCommand(ctx, session, Request{
+		Action: "set_pane_title",
+		Params: map[string]any{
+			"pane_id": paneID,
+			"title":   title,
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if !resp.Success {
+		return fmt.Errorf("%s", resp.Error)
+	}
+	return nil
+}
+
+// IsAttached checks if a session is currently attached
+func (c *Client) IsAttached(ctx context.Context, session string) (bool, error) {
+	sessions, err := c.ListSessions(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	for _, s := range sessions {
+		if s.Name == session {
+			return s.Attached, nil
+		}
+	}
+	return false, nil
+}
+
 // validSessionNameRegex matches valid session names
 // Must start with letter/number, can contain letters, numbers, dashes, underscores
 var validSessionNameRegex = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]*$`)

@@ -4,7 +4,17 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/Dicklesworthstone/ntm/internal/config"
 	"github.com/spf13/cobra"
+)
+
+var (
+	// Global flags
+	cfgFile  string
+	jsonFlag bool
+
+	// Global config (loaded once at startup)
+	cfg *config.NZMConfig
 )
 
 var rootCmd = &cobra.Command{
@@ -18,6 +28,19 @@ It allows you to:
   - Send commands and text to specific panes
   - View status of active sessions and agents
   - Kill sessions when done`,
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		var err error
+		cfg, err = config.NZMLoad(cfgFile)
+		if err != nil {
+			return fmt.Errorf("loading config: %w", err)
+		}
+		return nil
+	},
+}
+
+func init() {
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default $HOME/.config/nzm/config.toml)")
+	rootCmd.PersistentFlags().BoolVar(&jsonFlag, "json", false, "output in JSON format")
 }
 
 func main() {

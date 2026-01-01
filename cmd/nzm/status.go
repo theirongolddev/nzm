@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/nzm"
+	"github.com/Dicklesworthstone/ntm/internal/output"
 	"github.com/Dicklesworthstone/ntm/internal/zellij"
 	"github.com/spf13/cobra"
 )
@@ -23,7 +24,10 @@ Examples:
   nzm status
 
   # Show details for specific session
-  nzm status myproj`,
+  nzm status myproj
+  
+  # Output as JSON
+  nzm status --json`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runStatus,
 }
@@ -49,6 +53,14 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Output formatting
+	formatter := output.NZMDefaultFormatter(jsonFlag)
+
+	if formatter.IsJSON() {
+		return formatter.JSON(result)
+	}
+
+	// Text output
 	if len(result.Sessions) == 0 {
 		fmt.Println("No NZM sessions found.")
 		return nil
