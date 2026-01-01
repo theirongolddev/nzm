@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/theirongolddev/nzm/internal/zellij"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // PluginClient defines the interface for plugin operations

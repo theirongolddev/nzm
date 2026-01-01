@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/theirongolddev/nzm/internal/zellij"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // StatusClient defines the interface for status operations

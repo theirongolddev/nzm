@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/theirongolddev/nzm/internal/zellij"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // mockPluginClient implements the PluginClient interface for testing
