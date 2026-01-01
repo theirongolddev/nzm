@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/Dicklesworthstone/ntm/internal/zellij"
+	"github.com/theirongolddev/nzm/internal/zellij"
 )
 
 // KillClient defines the interface for kill operations

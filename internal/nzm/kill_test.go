@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/Dicklesworthstone/ntm/internal/zellij"
+	"github.com/theirongolddev/nzm/internal/zellij"
 )
 
 // killMockClient for kill tests

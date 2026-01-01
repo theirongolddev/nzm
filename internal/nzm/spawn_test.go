@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Dicklesworthstone/ntm/internal/zellij"
+	"github.com/theirongolddev/nzm/internal/zellij"
 )
 
 // mockZellijClient implements the ZellijClient interface for testing

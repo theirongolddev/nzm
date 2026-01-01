@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/Dicklesworthstone/ntm/internal/zellij"
+	"github.com/theirongolddev/nzm/internal/zellij"
 )
 
 // ZellijClient defines the interface for Zellij session operations

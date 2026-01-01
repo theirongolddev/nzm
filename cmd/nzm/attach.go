@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Dicklesworthstone/ntm/internal/zellij"
+	"github.com/theirongolddev/nzm/internal/zellij"
 	"github.com/spf13/cobra"
 )
 

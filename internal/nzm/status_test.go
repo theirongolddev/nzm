@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/Dicklesworthstone/ntm/internal/zellij"
+	"github.com/theirongolddev/nzm/internal/zellij"
 )
 
 // combinedMockClient implements both session and pane operations for status tests
