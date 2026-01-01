@@ -29,7 +29,15 @@ Examples:
 
   # Create session in background (detached)
   nzm spawn proj --cc 2 --detached`,
-	Args: cobra.ExactArgs(1),
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) < 1 {
+			return fmt.Errorf("missing required argument: SESSION_NAME\n\nUsage: nzm spawn <session-name> [flags]\n\nExample: nzm spawn myproject --cc=2")
+		}
+		if len(args) > 1 {
+			return fmt.Errorf("too many arguments: expected 1 session name, got %d", len(args))
+		}
+		return nil
+	},
 	RunE: runSpawn,
 }
 
