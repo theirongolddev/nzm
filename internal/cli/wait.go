@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Dicklesworthstone/ntm/internal/robot"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
 )
 
@@ -152,7 +152,7 @@ Examples:
 }
 
 func runWait(w io.Writer, opts WaitOptions) error {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := zellij.EnsureInstalled(); err != nil {
 		return err
 	}
 
@@ -169,7 +169,7 @@ func runWait(w io.Writer, opts WaitOptions) error {
 	res.ExplainIfInferred(os.Stderr)
 	opts.Session = res.Session
 
-	if !tmux.SessionExists(opts.Session) {
+	if !zellij.SessionExists(opts.Session) {
 		return fmt.Errorf("session '%s' not found", opts.Session)
 	}
 
@@ -197,7 +197,7 @@ func runWait(w io.Writer, opts WaitOptions) error {
 		}
 
 		// Get all panes
-		panes, err := tmux.GetPanes(opts.Session)
+		panes, err := zellij.GetPanes(opts.Session)
 		if err != nil {
 			return fmt.Errorf("failed to list panes: %w", err)
 		}
@@ -272,8 +272,8 @@ func isValidCondition(c WaitCondition) bool {
 }
 
 // filterPanesForWait filters panes based on wait options.
-func filterPanesForWait(panes []tmux.Pane, opts WaitOptions) []tmux.Pane {
-	var result []tmux.Pane
+func filterPanesForWait(panes []zellij.Pane, opts WaitOptions) []zellij.Pane {
+	var result []zellij.Pane
 
 	for _, pane := range panes {
 		// Skip user pane (index 0 typically has no agent type indicator)

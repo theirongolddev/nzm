@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // UnifiedDetector implements the Detector interface by combining
@@ -43,21 +43,21 @@ func (d *UnifiedDetector) Detect(paneID string) (AgentStatus, error) {
 	}
 
 	// Get pane activity time
-	lastActivity, err := tmux.GetPaneActivity(paneID)
+	lastActivity, err := zellij.GetPaneActivity(paneID)
 	if err != nil {
 		return status, err
 	}
 	status.LastActive = lastActivity
 
 	// Capture recent output for analysis
-	output, err := tmux.CapturePaneOutput(paneID, d.config.ScanLines)
+	output, err := zellij.CapturePaneOutput(paneID, d.config.ScanLines)
 	if err != nil {
 		return status, err
 	}
 	if strings.TrimSpace(output) == "" {
 		// Give tmux a brief moment to flush output, then retry once
 		time.Sleep(100 * time.Millisecond)
-		if retry, err := tmux.CapturePaneOutput(paneID, d.config.ScanLines); err == nil {
+		if retry, err := zellij.CapturePaneOutput(paneID, d.config.ScanLines); err == nil {
 			output = retry
 		}
 	}
@@ -66,7 +66,7 @@ func (d *UnifiedDetector) Detect(paneID string) (AgentStatus, error) {
 	// Try to get pane details for agent type detection
 	// We'll parse the pane title from output if needed
 	// Use paneID as target - tmux list-panes -s -t paneID lists all panes in that pane's session
-	panes, _ := tmux.GetPanesWithActivity(paneID)
+	panes, _ := zellij.GetPanesWithActivity(paneID)
 	for _, p := range panes {
 		if p.Pane.ID == paneID {
 			status.PaneName = p.Pane.Title
@@ -128,7 +128,7 @@ func (d *UnifiedDetector) DetectAllContext(ctx context.Context, session string) 
 		ctx = context.Background()
 	}
 
-	panes, err := tmux.GetPanesWithActivityContext(ctx, session)
+	panes, err := zellij.GetPanesWithActivityContext(ctx, session)
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +149,7 @@ func (d *UnifiedDetector) DetectAllContext(ctx context.Context, session string) 
 		}
 
 		// Capture output for this pane
-		output, err := tmux.CapturePaneOutputContext(ctx, pane.Pane.ID, d.config.ScanLines)
+		output, err := zellij.CapturePaneOutputContext(ctx, pane.Pane.ID, d.config.ScanLines)
 		if err != nil {
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				return nil, ctxErr

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // PTYFetcher implements Fetcher by sending commands to tmux panes
@@ -59,14 +59,14 @@ func (f *PTYFetcher) FetchQuota(ctx context.Context, paneID string, provider Pro
 	}
 
 	// Capture initial state for comparison
-	initialOutput, err := tmux.CapturePaneOutput(paneID, captureLines)
+	initialOutput, err := zellij.CapturePaneOutput(paneID, captureLines)
 	if err != nil {
 		info.Error = fmt.Sprintf("failed to capture initial output: %v", err)
 		return info, nil
 	}
 
 	// Send /usage command
-	if err := tmux.SendKeys(paneID, cmds.UsageCmd, true); err != nil {
+	if err := zellij.SendKeys(paneID, cmds.UsageCmd, true); err != nil {
 		info.Error = fmt.Sprintf("failed to send usage command: %v", err)
 		return info, nil
 	}
@@ -95,7 +95,7 @@ func (f *PTYFetcher) FetchQuota(ctx context.Context, paneID string, provider Pro
 			}
 
 			// Capture output
-			output, err := tmux.CapturePaneOutput(paneID, captureLines)
+			output, err := zellij.CapturePaneOutput(paneID, captureLines)
 			if err != nil {
 				lastErr = fmt.Errorf("capture failed: %w", err)
 				continue
@@ -147,7 +147,7 @@ func (f *PTYFetcher) waitForNewOutput(ctx context.Context, paneID, initialOutput
 				return "", fmt.Errorf("timeout waiting for output")
 			}
 
-			output, err := tmux.CapturePaneOutput(paneID, lines)
+			output, err := zellij.CapturePaneOutput(paneID, lines)
 			if err != nil {
 				continue
 			}
@@ -168,12 +168,12 @@ func (f *PTYFetcher) fetchStatus(ctx context.Context, paneID, statusCmd string, 
 	// For now, we assume caller handles deduplication or we check against known duplicates.
 	// But simply checking output change is safe.
 
-	initialOutput, err := tmux.CapturePaneOutput(paneID, lines)
+	initialOutput, err := zellij.CapturePaneOutput(paneID, lines)
 	if err != nil {
 		return "", err
 	}
 
-	if err := tmux.SendKeys(paneID, statusCmd, true); err != nil {
+	if err := zellij.SendKeys(paneID, statusCmd, true); err != nil {
 		return "", err
 	}
 

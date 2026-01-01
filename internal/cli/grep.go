@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Dicklesworthstone/ntm/internal/output"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
 )
 
@@ -191,7 +191,7 @@ type GrepOptions struct {
 }
 
 func runGrep(pattern, session string, opts GrepOptions) error {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := zellij.EnsureInstalled(); err != nil {
 		return err
 	}
 
@@ -208,7 +208,7 @@ func runGrep(pattern, session string, opts GrepOptions) error {
 	// Determine target session(s)
 	var sessions []string
 	if opts.AllSessions {
-		sessionList, err := tmux.ListSessions()
+		sessionList, err := zellij.ListSessions()
 		if err != nil {
 			return err
 		}
@@ -229,7 +229,7 @@ func runGrep(pattern, session string, opts GrepOptions) error {
 		res.ExplainIfInferred(os.Stderr)
 		session = res.Session
 
-		if !tmux.SessionExists(session) {
+		if !zellij.SessionExists(session) {
 			return fmt.Errorf("session '%s' not found", session)
 		}
 		sessions = []string{session}
@@ -242,7 +242,7 @@ func runGrep(pattern, session string, opts GrepOptions) error {
 	matchingPanes := make(map[string]bool)
 
 	for _, sess := range sessions {
-		panes, err := tmux.GetPanes(sess)
+		panes, err := zellij.GetPanes(sess)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to get panes for %s: %v\n", sess, err)
 			continue
@@ -251,14 +251,14 @@ func runGrep(pattern, session string, opts GrepOptions) error {
 		for _, pane := range panes {
 			// Apply agent filter
 			if opts.Filter.IsEmpty() {
-				if pane.Type == tmux.AgentUser {
+				if pane.Type == zellij.AgentUser {
 					continue
 				}
 			} else if !opts.Filter.Matches(pane.Type) {
 				continue
 			}
 
-			output, err := tmux.CapturePaneOutput(pane.ID, opts.MaxLines)
+			output, err := zellij.CapturePaneOutput(pane.ID, opts.MaxLines)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: failed to capture pane %s: %v\n", pane.Title, err)
 				continue

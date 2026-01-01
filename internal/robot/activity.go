@@ -8,7 +8,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/Dicklesworthstone/ntm/internal/status"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // VelocitySample represents a single velocity measurement at a point in time.
@@ -67,7 +67,7 @@ func (vt *VelocityTracker) Update() (*VelocitySample, error) {
 // updateLocked performs the update with the lock already held.
 func (vt *VelocityTracker) updateLocked() (*VelocitySample, error) {
 	// Capture current pane output
-	output, err := tmux.CaptureForStatusDetection(vt.PaneID)
+	output, err := zellij.CaptureForStatusDetection(vt.PaneID)
 	if err != nil {
 		return nil, err
 	}

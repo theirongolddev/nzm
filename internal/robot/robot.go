@@ -21,7 +21,7 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/cass"
 	"github.com/Dicklesworthstone/ntm/internal/config"
 	"github.com/Dicklesworthstone/ntm/internal/recipe"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 	"github.com/Dicklesworthstone/ntm/internal/tracker"
 )
 
@@ -476,14 +476,14 @@ func PrintStatus() error {
 			GoVersion: runtime.Version(),
 			OS:        runtime.GOOS,
 			Arch:      runtime.GOARCH,
-			TmuxOK:    tmux.IsInstalled(),
+			TmuxOK:    zellij.IsInstalled(),
 		},
 		Sessions: []SessionInfo{},
 		Summary:  StatusSummary{},
 	}
 
 	// Get all sessions
-	sessions, err := tmux.ListSessions()
+	sessions, err := zellij.ListSessions()
 	if err != nil {
 		// tmux not running is not an error for status
 		return encodeJSON(output)
@@ -498,7 +498,7 @@ func PrintStatus() error {
 		}
 
 		// Try to get agents from panes
-		panes, err := tmux.GetPanes(sess.Name)
+		panes, err := zellij.GetPanes(sess.Name)
 		if err == nil {
 			info.Panes = len(panes)
 			for _, pane := range panes {
@@ -685,8 +685,8 @@ func PrintMail(sessionName, projectKey string) error {
 
 	// Best-effort pane mapping when a session is provided and tmux is available.
 	assigned := make(map[string]bool)
-	if sessionName != "" && tmux.IsInstalled() && tmux.SessionExists(sessionName) {
-		if panes, err := tmux.GetPanes(sessionName); err == nil {
+	if sessionName != "" && zellij.IsInstalled() && zellij.SessionExists(sessionName) {
+		if panes, err := zellij.GetPanes(sessionName); err == nil {
 			paneInfos := parseNTMPanes(panes)
 			agentsByType := groupAgentsByType(agents)
 			for _, paneType := range []string{"cc", "cod", "gmi"} {
@@ -823,7 +823,7 @@ type ntmPaneInfo struct {
 
 var ntmPaneTitleRE = regexp.MustCompile(`^.+__(cc|cod|gmi)_(\d+)(?:_([A-Za-z0-9._/@:+-]+))?(?:\[[^\]]*\])?$`)
 
-func parseNTMPanes(panes []tmux.Pane) map[string][]ntmPaneInfo {
+func parseNTMPanes(panes []zellij.Pane) map[string][]ntmPaneInfo {
 	out := map[string][]ntmPaneInfo{
 		"cc":  {},
 		"cod": {},
@@ -1078,7 +1078,7 @@ func PrintVersion() error {
 
 // PrintSessions outputs minimal session list
 func PrintSessions() error {
-	sessions, err := tmux.ListSessions()
+	sessions, err := zellij.ListSessions()
 	if err != nil {
 		return encodeJSON([]SessionInfo{})
 	}
@@ -1104,7 +1104,7 @@ func PrintPlan() error {
 	}
 
 	// Check tmux availability
-	if !tmux.IsInstalled() {
+	if !zellij.IsInstalled() {
 		plan.Recommendation = "Install tmux first"
 		plan.Warnings = append(plan.Warnings, "tmux is not installed or not in PATH")
 		plan.Actions = append(plan.Actions, PlanAction{
@@ -1116,7 +1116,7 @@ func PrintPlan() error {
 	}
 
 	// Check for existing sessions
-	sessions, _ := tmux.ListSessions()
+	sessions, _ := zellij.ListSessions()
 
 	if len(sessions) == 0 {
 		plan.Recommendation = "Create your first coding session"
@@ -1484,7 +1484,7 @@ type PaneOutput struct {
 
 // PrintTail outputs recent pane output for AI consumption
 func PrintTail(session string, lines int, paneFilter []string) error {
-	if !tmux.SessionExists(session) {
+	if !zellij.SessionExists(session) {
 		return RobotError(
 			fmt.Errorf("session '%s' not found", session),
 			ErrCodeSessionNotFound,
@@ -1492,7 +1492,7 @@ func PrintTail(session string, lines int, paneFilter []string) error {
 		)
 	}
 
-	panes, err := tmux.GetPanes(session)
+	panes, err := zellij.GetPanes(session)
 	if err != nil {
 		return RobotError(
 			fmt.Errorf("failed to get panes: %w", err),
@@ -1524,7 +1524,7 @@ func PrintTail(session string, lines int, paneFilter []string) error {
 		}
 
 		// Capture pane output
-		captured, err := tmux.CapturePaneOutput(pane.ID, lines)
+		captured, err := zellij.CapturePaneOutput(pane.ID, lines)
 		if err != nil {
 			// Include empty output on error
 			output.Panes[paneKey] = PaneOutput{
@@ -1738,10 +1738,10 @@ func buildSnapshotAgentMail() *SnapshotAgentMail {
 		agentNames[a.Name] = struct{}{}
 	}
 	paneByAgent := make(map[string]string)
-	if tmux.IsInstalled() && len(agentNames) > 0 {
-		if sessions, err := tmux.ListSessions(); err == nil {
+	if zellij.IsInstalled() && len(agentNames) > 0 {
+		if sessions, err := zellij.ListSessions(); err == nil {
 			for _, sess := range sessions {
-				panes, err := tmux.GetPanes(sess.Name)
+				panes, err := zellij.GetPanes(sess.Name)
 				if err != nil {
 					continue
 				}
@@ -1891,7 +1891,7 @@ func PrintSnapshot(cfg *config.Config) error {
 	}
 
 	// Check tmux availability
-	if !tmux.IsInstalled() {
+	if !zellij.IsInstalled() {
 		output.Alerts = append(output.Alerts, "tmux is not installed")
 		return encodeJSON(output)
 	}
@@ -1904,7 +1904,7 @@ func PrintSnapshot(cfg *config.Config) error {
 	}
 
 	// Get all sessions
-	sessions, err := tmux.ListSessions()
+	sessions, err := zellij.ListSessions()
 	if err != nil {
 		// No sessions is not an error for snapshot
 		return encodeJSON(output)
@@ -1918,7 +1918,7 @@ func PrintSnapshot(cfg *config.Config) error {
 		}
 
 		// Get panes for this session
-		panes, err := tmux.GetPanes(sess.Name)
+		panes, err := zellij.GetPanes(sess.Name)
 		if err != nil {
 			output.Alerts = append(output.Alerts, fmt.Sprintf("failed to get panes for %s: %v", sess.Name, err))
 			continue
@@ -1928,7 +1928,7 @@ func PrintSnapshot(cfg *config.Config) error {
 			// Capture output for state detection and enhanced type detection
 			captured := ""
 			capturedErr := error(nil)
-			captured, capturedErr = tmux.CapturePaneOutput(pane.ID, 50)
+			captured, capturedErr = zellij.CapturePaneOutput(pane.ID, 50)
 
 			// Use enhanced agent type detection
 			detection := DetectAgentTypeEnhanced(pane, captured)
@@ -2040,15 +2040,15 @@ func PrintSnapshot(cfg *config.Config) error {
 }
 
 // agentTypeString converts AgentType to string for JSON
-func agentTypeString(t tmux.AgentType) string {
+func agentTypeString(t zellij.AgentType) string {
 	switch t {
-	case tmux.AgentClaude:
+	case zellij.AgentClaude:
 		return "claude"
-	case tmux.AgentCodex:
+	case zellij.AgentCodex:
 		return "codex"
-	case tmux.AgentGemini:
+	case zellij.AgentGemini:
 		return "gemini"
-	case tmux.AgentUser:
+	case zellij.AgentUser:
 		return "user"
 	default:
 		return "unknown"
@@ -2107,7 +2107,7 @@ func PrintSend(opts SendOptions) error {
 		})
 	}
 
-	if !tmux.SessionExists(opts.Session) {
+	if !zellij.SessionExists(opts.Session) {
 		return encodeJSON(SendOutput{
 			RobotResponse:  NewErrorResponse(fmt.Errorf("session '%s' not found", opts.Session), ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions"),
 			Session:        opts.Session,
@@ -2119,7 +2119,7 @@ func PrintSend(opts SendOptions) error {
 		})
 	}
 
-	panes, err := tmux.GetPanes(opts.Session)
+	panes, err := zellij.GetPanes(opts.Session)
 	if err != nil {
 		return encodeJSON(SendOutput{
 			RobotResponse:  NewErrorResponse(fmt.Errorf("failed to get panes: %w", err), ErrCodeInternalError, "Check tmux is running"),
@@ -2163,7 +2163,7 @@ func PrintSend(opts SendOptions) error {
 	hasTypeFilter := len(typeFilterMap) > 0
 
 	// Determine which panes to target
-	var targetPanes []tmux.Pane
+	var targetPanes []zellij.Pane
 	for _, pane := range panes {
 		paneKey := fmt.Sprintf("%d", pane.Index)
 
@@ -2215,7 +2215,7 @@ func PrintSend(opts SendOptions) error {
 			time.Sleep(time.Duration(opts.DelayMs) * time.Millisecond)
 		}
 
-		err := tmux.SendKeys(pane.ID, opts.Message, true)
+		err := zellij.SendKeys(pane.ID, opts.Message, true)
 		if err != nil {
 			output.Failed = append(output.Failed, SendError{
 				Pane:  paneKey,
@@ -2619,14 +2619,14 @@ func buildCorrelationGraph() *GraphCorrelation {
 	}
 
 	// Best-effort tmux pane mapping for Agent Mail agents (NTM sessions).
-	if tmux.IsInstalled() {
-		sessions, err := tmux.ListSessions()
+	if zellij.IsInstalled() {
+		sessions, err := zellij.ListSessions()
 		if err != nil {
 			corr.Errors = append(corr.Errors, fmt.Sprintf("tmux list_sessions: %v", err))
 		} else {
 			agentsByType := groupAgentsByType(agents)
 			for _, sess := range sessions {
-				panes, err := tmux.GetPanes(sess.Name)
+				panes, err := zellij.GetPanes(sess.Name)
 				if err != nil {
 					continue
 				}
@@ -3074,7 +3074,7 @@ func PrintTerse(cfg *config.Config) error {
 	mailCount := getTerseMailCount()
 
 	// Get all sessions
-	sessions, err := tmux.ListSessions()
+	sessions, err := zellij.ListSessions()
 	if err != nil {
 		// No sessions - output minimal state with just beads info
 		state := TerseState{
@@ -3102,7 +3102,7 @@ func PrintTerse(cfg *config.Config) error {
 		}
 
 		// Get panes for this session
-		panes, err := tmux.GetPanes(sess.Name)
+		panes, err := zellij.GetPanes(sess.Name)
 		if err == nil {
 			state.TotalAgents = len(panes)
 			// Count agents by state: working (active), idle, error
@@ -3110,7 +3110,7 @@ func PrintTerse(cfg *config.Config) error {
 				agentType := agentTypeString(pane.Type)
 				if agentType != "user" && agentType != "unknown" {
 					// Capture output to detect state
-					captured, captureErr := tmux.CapturePaneOutput(pane.ID, 20)
+					captured, captureErr := zellij.CapturePaneOutput(pane.ID, 20)
 					if captureErr == nil {
 						lines := splitLines(stripANSI(captured))
 						paneState := detectState(lines, pane.Title)
@@ -3362,7 +3362,7 @@ func generateContextHints(lowUsage, highUsage []string, highCount, total int) *C
 
 // PrintContext outputs context window usage information for all agents in a session.
 func PrintContext(session string, lines int) error {
-	if !tmux.SessionExists(session) {
+	if !zellij.SessionExists(session) {
 		return encodeJSON(ContextOutput{
 			RobotResponse: NewErrorResponse(
 				fmt.Errorf("session '%s' not found", session),
@@ -3374,7 +3374,7 @@ func PrintContext(session string, lines int) error {
 		})
 	}
 
-	panes, err := tmux.GetPanes(session)
+	panes, err := zellij.GetPanes(session)
 	if err != nil {
 		return encodeJSON(ContextOutput{
 			RobotResponse: NewErrorResponse(err, ErrCodeInternalError, "Failed to get panes"),
@@ -3401,7 +3401,7 @@ func PrintContext(session string, lines int) error {
 
 		model := detectModel(agentType, pane.Title)
 
-		scrollback, _ := tmux.CapturePaneOutput(pane.ID, lines)
+		scrollback, _ := zellij.CapturePaneOutput(pane.ID, lines)
 		cleanText := stripANSI(scrollback)
 		lineList := splitLines(cleanText)
 		state := detectState(lineList, pane.Title)
@@ -3504,7 +3504,7 @@ type ActivityAgentHints struct {
 // PrintActivity outputs agent activity state for a session.
 // This is the handler for --robot-activity flag.
 func PrintActivity(opts ActivityOptions) error {
-	if !tmux.SessionExists(opts.Session) {
+	if !zellij.SessionExists(opts.Session) {
 		return RobotError(
 			fmt.Errorf("session '%s' not found", opts.Session),
 			ErrCodeSessionNotFound,
@@ -3512,7 +3512,7 @@ func PrintActivity(opts ActivityOptions) error {
 		)
 	}
 
-	panes, err := tmux.GetPanes(opts.Session)
+	panes, err := zellij.GetPanes(opts.Session)
 	if err != nil {
 		return RobotError(
 			fmt.Errorf("failed to get panes: %w", err),

@@ -11,7 +11,7 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/clipboard"
 	"github.com/Dicklesworthstone/ntm/internal/codeblock"
 	"github.com/Dicklesworthstone/ntm/internal/output"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // ExtractResponse is the JSON output format for extract command.
@@ -73,7 +73,7 @@ Examples:
 
 func runExtract(sessionName, paneIndex, language string, lastPane bool, lines int, copyFlag, applyFlag bool, selectBlock int) error {
 	// Check session exists
-	if !tmux.SessionExists(sessionName) {
+	if !zellij.SessionExists(sessionName) {
 		if IsJSONOutput() {
 			return output.PrintJSON(output.NewErrorWithCode("SESSION_NOT_FOUND",
 				fmt.Sprintf("session '%s' does not exist", sessionName)))
@@ -82,7 +82,7 @@ func runExtract(sessionName, paneIndex, language string, lastPane bool, lines in
 	}
 
 	// Get panes
-	panes, err := tmux.GetPanes(sessionName)
+	panes, err := zellij.GetPanes(sessionName)
 	if err != nil {
 		if IsJSONOutput() {
 			return output.PrintJSON(output.NewErrorWithDetails("failed to get panes", err.Error()))
@@ -91,24 +91,24 @@ func runExtract(sessionName, paneIndex, language string, lastPane bool, lines in
 	}
 
 	// Filter panes
-	var targetPanes []tmux.Pane
+	var targetPanes []zellij.Pane
 	if lastPane {
 		// Find most recently active pane
 		for _, p := range panes {
 			if p.Active {
-				targetPanes = []tmux.Pane{p}
+				targetPanes = []zellij.Pane{p}
 				break
 			}
 		}
 		if len(targetPanes) == 0 && len(panes) > 0 {
-			targetPanes = []tmux.Pane{panes[len(panes)-1]}
+			targetPanes = []zellij.Pane{panes[len(panes)-1]}
 		}
 	} else if paneIndex != "" {
 		// Find specific pane by index or title
 		for _, p := range panes {
 			paneIdxStr := fmt.Sprintf("%d", p.Index)
 			if paneIdxStr == paneIndex || p.Title == paneIndex || strings.Contains(p.Title, paneIndex) {
-				targetPanes = []tmux.Pane{p}
+				targetPanes = []zellij.Pane{p}
 				break
 			}
 		}
@@ -139,7 +139,7 @@ func runExtract(sessionName, paneIndex, language string, lastPane bool, lines in
 
 	for _, pane := range targetPanes {
 		// Capture pane output
-		captured, err := tmux.CapturePaneOutput(pane.ID, lines)
+		captured, err := zellij.CapturePaneOutput(pane.ID, lines)
 		if err != nil {
 			continue // Skip panes that fail
 		}

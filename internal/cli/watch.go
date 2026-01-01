@@ -13,7 +13,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
 	"github.com/Dicklesworthstone/ntm/internal/watcher"
 )
@@ -104,7 +104,7 @@ type watchOptions struct {
 }
 
 func runWatch(session string, opts watchOptions) error {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := zellij.EnsureInstalled(); err != nil {
 		return err
 	}
 
@@ -118,7 +118,7 @@ func runWatch(session string, opts watchOptions) error {
 	res.ExplainIfInferred(os.Stderr)
 	session = res.Session
 
-	if !tmux.SessionExists(session) {
+	if !zellij.SessionExists(session) {
 		return fmt.Errorf("session '%s' not found", session)
 	}
 
@@ -189,7 +189,7 @@ func watchLoop(ctx context.Context, session string, opts watchOptions, t theme.T
 		}
 
 		// Get panes
-		panes, err := tmux.GetPanes(session)
+		panes, err := zellij.GetPanes(session)
 		if err != nil {
 			return fmt.Errorf("failed to get panes: %w", err)
 		}
@@ -212,7 +212,7 @@ func watchLoop(ctx context.Context, session string, opts watchOptions, t theme.T
 			if !firstRun {
 				lines = 100 // Capture more to find diff
 			}
-			output, err := tmux.CapturePaneOutput(pane.ID, lines)
+			output, err := zellij.CapturePaneOutput(pane.ID, lines)
 			if err != nil {
 				if opts.activityOnly {
 					continue
@@ -244,13 +244,13 @@ func watchLoop(ctx context.Context, session string, opts watchOptions, t theme.T
 	}
 }
 
-func filterPanes(panes []tmux.Pane, opts watchOptions) []tmux.Pane {
+func filterPanes(panes []zellij.Pane, opts watchOptions) []zellij.Pane {
 	// If no filters, return all panes
 	if !opts.filterClaude && !opts.filterCodex && !opts.filterGemini && opts.filterPane == "" {
 		return panes
 	}
 
-	var filtered []tmux.Pane
+	var filtered []zellij.Pane
 	for _, p := range panes {
 		// Filter by specific pane
 		if opts.filterPane != "" {
@@ -261,13 +261,13 @@ func filterPanes(panes []tmux.Pane, opts watchOptions) []tmux.Pane {
 		}
 
 		// Filter by agent type
-		if opts.filterClaude && p.Type == tmux.AgentClaude {
+		if opts.filterClaude && p.Type == zellij.AgentClaude {
 			filtered = append(filtered, p)
 		}
-		if opts.filterCodex && p.Type == tmux.AgentCodex {
+		if opts.filterCodex && p.Type == zellij.AgentCodex {
 			filtered = append(filtered, p)
 		}
-		if opts.filterGemini && p.Type == tmux.AgentGemini {
+		if opts.filterGemini && p.Type == zellij.AgentGemini {
 			filtered = append(filtered, p)
 		}
 	}
@@ -317,7 +317,7 @@ func computeDiff(old, new string) string {
 	return strings.TrimRight(newContent, "\n")
 }
 
-func printPaneOutput(pane tmux.Pane, output string, opts watchOptions, t theme.Theme) {
+func printPaneOutput(pane zellij.Pane, output string, opts watchOptions, t theme.Theme) {
 	if output == "" {
 		return
 	}
@@ -325,11 +325,11 @@ func printPaneOutput(pane tmux.Pane, output string, opts watchOptions, t theme.T
 	// Create prefix style based on agent type
 	var prefixColor lipgloss.Color
 	switch pane.Type {
-	case tmux.AgentClaude:
+	case zellij.AgentClaude:
 		prefixColor = t.Claude
-	case tmux.AgentCodex:
+	case zellij.AgentCodex:
 		prefixColor = t.Codex
-	case tmux.AgentGemini:
+	case zellij.AgentGemini:
 		prefixColor = t.Gemini
 	default:
 		prefixColor = t.Green
@@ -420,7 +420,7 @@ func runFileWatch(ctx context.Context, session string, opts watchOptions, t them
 
 		if matched {
 			// Determine targets
-			panes, err := tmux.GetPanes(session)
+			panes, err := zellij.GetPanes(session)
 			if err != nil {
 				fmt.Printf("Error getting panes: %v\n", err)
 				return
@@ -434,7 +434,7 @@ func runFileWatch(ctx context.Context, session string, opts watchOptions, t them
 
 			fmt.Printf("Triggering command on %d pane(s)...\n", len(targets))
 			for _, p := range targets {
-				if err := tmux.PasteKeys(p.ID, opts.watchCommand, true); err != nil {
+				if err := zellij.PasteKeys(p.ID, opts.watchCommand, true); err != nil {
 					fmt.Printf("Failed to send to pane %s: %v\n", p.ID, err)
 				}
 			}

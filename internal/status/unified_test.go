@@ -1,6 +1,8 @@
 package status
 
 import (
+	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"testing"
@@ -441,43 +443,79 @@ func TestDefaultConfig(t *testing.T) {
 	}
 }
 
-// tmuxAvailable checks if tmux is installed and returns true if so
-func tmuxAvailable() bool {
-	_, err := exec.LookPath("tmux")
+// zellijAvailable checks if zellij is installed and returns true if so
+func zellijAvailable() bool {
+	_, err := exec.LookPath("zellij")
 	return err == nil
 }
 
-// createTestSession creates a tmux session for testing and returns the session name
+// Deprecated: Use zellijAvailable instead
+func tmuxAvailable() bool {
+	return zellijAvailable()
+}
+
+// createTestSession creates a Zellij session for testing and returns the session name.
+// Note: Zellij requires a terminal to create sessions, so this may skip in CI environments.
 func createTestSession(t *testing.T) string {
 	t.Helper()
 	sessionName := "ntm_status_test_" + time.Now().Format("150405")
 
-	cmd := exec.Command("tmux", "new-session", "-d", "-s", sessionName)
-	output, err := cmd.CombinedOutput()
+	// Create a minimal layout file
+	layoutContent := fmt.Sprintf(`layout {
+    pane name="%s__user_1"
+}`, sessionName)
+	layoutFile, err := os.CreateTemp("", "nzm-test-*.kdl")
 	if err != nil {
-		t.Skipf("Failed to create test session (tmux may be unavailable): %v: %s", err, output)
+		t.Skipf("Failed to create layout file: %v", err)
 	}
+	layoutPath := layoutFile.Name()
+	layoutFile.WriteString(layoutContent)
+	layoutFile.Close()
 
 	t.Cleanup(func() {
-		exec.Command("tmux", "kill-session", "-t", sessionName).Run()
+		os.Remove(layoutPath)
 	})
 
-	// Give tmux a moment to set up
-	time.Sleep(100 * time.Millisecond)
+	// Try to create a Zellij session in the background
+	cmd := exec.Command("zellij", "--session", sessionName, "--layout", layoutPath)
+	cmd.Stdin = nil
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	
+	if err := cmd.Start(); err != nil {
+		t.Skipf("Failed to start Zellij session (may need terminal): %v", err)
+	}
+
+	// Don't wait - let it run
+	go func() { _ = cmd.Wait() }()
+
+	t.Cleanup(func() {
+		exec.Command("zellij", "kill-session", sessionName).Run()
+	})
+
+	// Give Zellij time to start
+	time.Sleep(500 * time.Millisecond)
+
+	// Verify session exists
+	checkCmd := exec.Command("zellij", "list-sessions")
+	output, err := checkCmd.Output()
+	if err != nil || !strings.Contains(string(output), sessionName) {
+		t.Skipf("Zellij session creation failed (may need terminal environment)")
+	}
 
 	return sessionName
 }
 
-// TestDetect tests the Detect method with a real tmux session
+// TestDetect tests the Detect method with a real Zellij session
 func TestDetect(t *testing.T) {
-	if !tmuxAvailable() {
-		t.Skip("tmux not available")
+	if !zellijAvailable() {
+		t.Skip("zellij not available")
 	}
 
 	sessionName := createTestSession(t)
 
 	// Get the pane ID from the session
-	cmd := exec.Command("tmux", "list-panes", "-t", sessionName, "-F", "#{pane_id}")
+	cmd := exec.Command("zellij", "list-panes", "-t", sessionName, "-F", "#{pane_id}")
 	output, err := cmd.Output()
 	if err != nil {
 		t.Fatalf("Failed to get pane ID: %v", err)
@@ -490,7 +528,7 @@ func TestDetect(t *testing.T) {
 
 	d := NewDetector()
 	status, err := d.Detect(paneID)
-	// Note: Detect may fail due to timestamp parsing issues in some tmux versions
+	// Note: Detect may fail due to timestamp parsing issues in some Zellij versions
 	// This is acceptable as long as the function is called
 	if err != nil {
 		t.Logf("Detect returned error (may be expected): %v", err)
@@ -518,8 +556,8 @@ func TestDetect(t *testing.T) {
 
 // TestDetectNonexistentPane tests Detect with an invalid pane ID
 func TestDetectNonexistentPane(t *testing.T) {
-	if !tmuxAvailable() {
-		t.Skip("tmux not available")
+	if !zellijAvailable() {
+		t.Skip("zellij not available")
 	}
 
 	d := NewDetector()
@@ -529,10 +567,10 @@ func TestDetectNonexistentPane(t *testing.T) {
 	}
 }
 
-// TestDetectAll tests the DetectAll method with a real tmux session
+// TestDetectAll tests the DetectAll method with a real Zellij session
 func TestDetectAll(t *testing.T) {
-	if !tmuxAvailable() {
-		t.Skip("tmux not available")
+	if !zellijAvailable() {
+		t.Skip("zellij not available")
 	}
 
 	sessionName := createTestSession(t)
@@ -561,8 +599,8 @@ func TestDetectAll(t *testing.T) {
 
 // TestDetectAllNonexistentSession tests DetectAll with an invalid session
 func TestDetectAllNonexistentSession(t *testing.T) {
-	if !tmuxAvailable() {
-		t.Skip("tmux not available")
+	if !zellijAvailable() {
+		t.Skip("zellij not available")
 	}
 
 	d := NewDetector()
@@ -574,14 +612,14 @@ func TestDetectAllNonexistentSession(t *testing.T) {
 
 // TestDetectWithErrorOutput tests detection of error states
 func TestDetectWithErrorOutput(t *testing.T) {
-	if !tmuxAvailable() {
-		t.Skip("tmux not available")
+	if !zellijAvailable() {
+		t.Skip("zellij not available")
 	}
 
 	sessionName := createTestSession(t)
 
 	// Get pane ID
-	cmd := exec.Command("tmux", "list-panes", "-t", sessionName, "-F", "#{pane_id}")
+	cmd := exec.Command("zellij", "list-panes", "-t", sessionName, "-F", "#{pane_id}")
 	output, err := cmd.Output()
 	if err != nil {
 		t.Fatalf("Failed to get pane ID: %v", err)
@@ -589,12 +627,12 @@ func TestDetectWithErrorOutput(t *testing.T) {
 	paneID := strings.TrimSpace(string(output))
 
 	// Send an error message to the pane
-	exec.Command("tmux", "send-keys", "-t", paneID, "echo 'Error: rate limit exceeded'", "Enter").Run()
+	exec.Command("zellij", "send-keys", "-t", paneID, "echo 'Error: rate limit exceeded'", "Enter").Run()
 	time.Sleep(200 * time.Millisecond)
 
 	d := NewDetector()
 	status, err := d.Detect(paneID)
-	// Note: Detect may fail due to timestamp parsing in some tmux versions
+	// Note: Detect may fail due to timestamp parsing in some Zellij versions
 	if err != nil {
 		t.Logf("Detect returned error (may be expected): %v", err)
 		return // Acceptable for coverage purposes
@@ -609,14 +647,14 @@ func TestDetectWithErrorOutput(t *testing.T) {
 
 // TestDetectWithIdlePrompt tests detection of idle states
 func TestDetectWithIdlePrompt(t *testing.T) {
-	if !tmuxAvailable() {
-		t.Skip("tmux not available")
+	if !zellijAvailable() {
+		t.Skip("zellij not available")
 	}
 
 	sessionName := createTestSession(t)
 
 	// Get pane ID
-	cmd := exec.Command("tmux", "list-panes", "-t", sessionName, "-F", "#{pane_id}")
+	cmd := exec.Command("zellij", "list-panes", "-t", sessionName, "-F", "#{pane_id}")
 	output, err := cmd.Output()
 	if err != nil {
 		t.Fatalf("Failed to get pane ID: %v", err)
@@ -626,7 +664,7 @@ func TestDetectWithIdlePrompt(t *testing.T) {
 	// The pane should start at a shell prompt, which should be detected as idle
 	d := NewDetector()
 	status, err := d.Detect(paneID)
-	// Note: Detect may fail due to timestamp parsing in some tmux versions
+	// Note: Detect may fail due to timestamp parsing in some Zellij versions
 	if err != nil {
 		t.Logf("Detect returned error (may be expected): %v", err)
 		return // Acceptable for coverage purposes
@@ -640,14 +678,14 @@ func TestDetectWithIdlePrompt(t *testing.T) {
 
 // TestDetectAllWithMultiplePanes tests DetectAll with multiple panes
 func TestDetectAllWithMultiplePanes(t *testing.T) {
-	if !tmuxAvailable() {
-		t.Skip("tmux not available")
+	if !zellijAvailable() {
+		t.Skip("zellij not available")
 	}
 
 	sessionName := createTestSession(t)
 
 	// Split pane to create a second one
-	exec.Command("tmux", "split-window", "-t", sessionName).Run()
+	exec.Command("zellij", "split-window", "-t", sessionName).Run()
 	time.Sleep(100 * time.Millisecond)
 
 	d := NewDetector()

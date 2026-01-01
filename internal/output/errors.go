@@ -222,10 +222,10 @@ var (
 	HintNoSessions       = "Run 'ntm spawn <name>' to create a new session"
 	HintSessionInference = "Specify a session name explicitly, e.g., 'ntm status <session>'"
 
-	// Tmux errors
-	HintTmuxNotInstalled = "Install tmux: brew install tmux (macOS) or apt install tmux (Linux)"
-	HintTmuxNotRunning   = "Start tmux server with 'tmux new-session -d' or run ntm spawn"
-	HintNotInTmux        = "Run this command from within a tmux session, or specify --session"
+	// Zellij errors
+	HintZellijNotInstalled = "Install zellij: brew install zellij (macOS) or cargo install zellij"
+	HintZellijNotRunning   = "Start zellij with 'zellij' or run nzm spawn"
+	HintNotInZellij        = "Run this command from within a Zellij session, or specify --session"
 
 	// Config errors
 	HintConfigNotFound = "Run 'ntm config init' to create a default configuration"
@@ -258,11 +258,17 @@ func SessionExistsError(session string) *CLIError {
 		WithHint(HintSessionExists)
 }
 
-// TmuxNotInstalledError creates a tmux not installed error with hint
+// ZellijNotInstalledError creates a zellij not installed error with hint
+func ZellijNotInstalledError() *CLIError {
+	return NewCLIError("zellij is not installed").
+		WithCode("ZELLIJ_NOT_INSTALLED").
+		WithHint(HintZellijNotInstalled)
+}
+
+// TmuxNotInstalledError is an alias for ZellijNotInstalledError for backwards compatibility
+// Deprecated: Use ZellijNotInstalledError instead
 func TmuxNotInstalledError() *CLIError {
-	return NewCLIError("tmux is not installed").
-		WithCode("TMUX_NOT_INSTALLED").
-		WithHint(HintTmuxNotInstalled)
+	return ZellijNotInstalledError()
 }
 
 // PaneNotFoundError creates a pane not found error with hint

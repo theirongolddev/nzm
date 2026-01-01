@@ -12,7 +12,7 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/cass"
 	"github.com/Dicklesworthstone/ntm/internal/config"
 	"github.com/Dicklesworthstone/ntm/internal/history"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 	"github.com/Dicklesworthstone/ntm/internal/tracker"
 	"github.com/Dicklesworthstone/ntm/internal/tui/dashboard/panels"
 )
@@ -114,8 +114,8 @@ func TestFetchMetricsCmd_SkipsUserPanes(t *testing.T) {
 	t.Parallel()
 
 	m := newTestModel(120)
-	m.panes = []tmux.Pane{
-		{ID: "user-pane", Type: tmux.AgentUser, Title: "user"},
+	m.panes = []zellij.Pane{
+		{ID: "user-pane", Type: zellij.AgentUser, Title: "user"},
 	}
 
 	cmd := m.fetchMetricsCmd()

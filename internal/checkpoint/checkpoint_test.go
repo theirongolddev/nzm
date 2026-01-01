@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 func TestGenerateID(t *testing.T) {
@@ -702,11 +702,11 @@ func TestCheckpoint_Summary(t *testing.T) {
 }
 
 func TestFromTmuxPane(t *testing.T) {
-	pane := tmux.Pane{
+	pane := zellij.Pane{
 		Index:   0,
 		ID:      "%0",
 		Title:   "test-pane",
-		Type:    tmux.AgentClaude,
+		Type:    zellij.AgentClaude,
 		Command: "claude",
 		Width:   120,
 		Height:  40,
@@ -723,8 +723,8 @@ func TestFromTmuxPane(t *testing.T) {
 	if state.Title != "test-pane" {
 		t.Errorf("Title = %q, want test-pane", state.Title)
 	}
-	if state.AgentType != string(tmux.AgentClaude) {
-		t.Errorf("AgentType = %q, want %s", state.AgentType, tmux.AgentClaude)
+	if state.AgentType != string(zellij.AgentClaude) {
+		t.Errorf("AgentType = %q, want %s", state.AgentType, zellij.AgentClaude)
 	}
 	if state.Command != "claude" {
 		t.Errorf("Command = %q, want claude", state.Command)

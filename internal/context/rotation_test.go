@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/config"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // MockPaneSpawner is a test double for PaneSpawner.
@@ -14,7 +14,7 @@ type MockPaneSpawner struct {
 	spawnedPanes []string
 	killedPanes  []string
 	sentKeys     map[string][]string
-	panes        []tmux.Pane
+	panes        []zellij.Pane
 	spawnError   error
 	killError    error
 	sendError    error
@@ -24,7 +24,7 @@ type MockPaneSpawner struct {
 func NewMockPaneSpawner() *MockPaneSpawner {
 	return &MockPaneSpawner{
 		sentKeys: make(map[string][]string),
-		panes:    []tmux.Pane{},
+		panes:    []zellij.Pane{},
 	}
 }
 
@@ -53,7 +53,7 @@ func (m *MockPaneSpawner) SendKeys(paneID, text string, enter bool) error {
 	return nil
 }
 
-func (m *MockPaneSpawner) GetPanes(session string) ([]tmux.Pane, error) {
+func (m *MockPaneSpawner) GetPanes(session string) ([]zellij.Pane, error) {
 	if m.panesError != nil {
 		return nil, m.panesError
 	}

@@ -11,7 +11,7 @@ import (
 
 	"github.com/Dicklesworthstone/ntm/internal/output"
 	"github.com/Dicklesworthstone/ntm/internal/quota"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 func newQuotaCmd() *cobra.Command {
@@ -47,11 +47,11 @@ Examples:
 }
 
 func runQuota(session string) error {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := zellij.EnsureInstalled(); err != nil {
 		return err
 	}
 
-	panes, err := tmux.GetPanes(session)
+	panes, err := zellij.GetPanes(session)
 	if err != nil {
 		return err
 	}
@@ -70,11 +70,11 @@ func runQuota(session string) error {
 	for _, p := range panes {
 		var provider quota.Provider
 		switch p.Type {
-		case tmux.AgentClaude:
+		case zellij.AgentClaude:
 			provider = quota.ProviderClaude
-		case tmux.AgentCodex:
+		case zellij.AgentCodex:
 			provider = quota.ProviderCodex
-		case tmux.AgentGemini:
+		case zellij.AgentGemini:
 			provider = quota.ProviderGemini
 		default:
 			continue // Skip user/unknown panes

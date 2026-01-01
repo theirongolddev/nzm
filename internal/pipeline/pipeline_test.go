@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/status"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 func TestTruncate(t *testing.T) {
@@ -75,11 +75,11 @@ func tmuxAvailable() bool {
 func createTestSession(t *testing.T) string {
 	t.Helper()
 	name := fmt.Sprintf("ntm_pipeline_test_%d", time.Now().UnixNano())
-	if err := tmux.CreateSession(name, os.TempDir()); err != nil {
+	if err := zellij.CreateSession(name, os.TempDir()); err != nil {
 		t.Fatalf("failed to create test session: %v", err)
 	}
 	t.Cleanup(func() {
-		_ = tmux.KillSession(name)
+		_ = zellij.KillSession(name)
 	})
 	return name
 }
@@ -154,7 +154,7 @@ func TestWaitForIdle_ContextCancellation(t *testing.T) {
 	}
 
 	session := createTestSession(t)
-	panes, err := tmux.GetPanes(session)
+	panes, err := zellij.GetPanes(session)
 	if err != nil || len(panes) == 0 {
 		t.Skip("could not get test pane")
 	}
@@ -179,7 +179,7 @@ func TestWaitForIdle_Timeout(t *testing.T) {
 	}
 
 	session := createTestSession(t)
-	panes, err := tmux.GetPanes(session)
+	panes, err := zellij.GetPanes(session)
 	if err != nil || len(panes) == 0 {
 		t.Skip("could not get test pane")
 	}

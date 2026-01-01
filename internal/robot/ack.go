@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // AckOutput is the structured output for --robot-ack
@@ -76,7 +76,7 @@ func PrintAck(opts AckOptions) error {
 		TimedOut:      false,
 	}
 
-	if !tmux.SessionExists(opts.Session) {
+	if !zellij.SessionExists(opts.Session) {
 		output.Failed = append(output.Failed, AckFailure{
 			Pane:   "session",
 			Reason: fmt.Sprintf("session '%s' not found", opts.Session),
@@ -85,7 +85,7 @@ func PrintAck(opts AckOptions) error {
 		return encodeJSON(output)
 	}
 
-	panes, err := tmux.GetPanes(opts.Session)
+	panes, err := zellij.GetPanes(opts.Session)
 	if err != nil {
 		output.Failed = append(output.Failed, AckFailure{
 			Pane:   "panes",
@@ -103,7 +103,7 @@ func PrintAck(opts AckOptions) error {
 	hasPaneFilter := len(paneFilterMap) > 0
 
 	// Determine which panes to monitor
-	var targetPanes []tmux.Pane
+	var targetPanes []zellij.Pane
 	for _, pane := range panes {
 		paneKey := fmt.Sprintf("%d", pane.Index)
 
@@ -136,7 +136,7 @@ func PrintAck(opts AckOptions) error {
 	initialStates := make(map[string]string)
 	for _, pane := range targetPanes {
 		paneKey := fmt.Sprintf("%d", pane.Index)
-		captured, err := tmux.CapturePaneOutput(pane.ID, 20)
+		captured, err := zellij.CapturePaneOutput(pane.ID, 20)
 		if err == nil {
 			initialStates[paneKey] = stripANSI(captured)
 		}
@@ -155,7 +155,7 @@ func PrintAck(opts AckOptions) error {
 
 		for _, paneKey := range output.Pending {
 			// Find the pane
-			var targetPane *tmux.Pane
+			var targetPane *zellij.Pane
 			for i := range targetPanes {
 				if fmt.Sprintf("%d", targetPanes[i].Index) == paneKey {
 					targetPane = &targetPanes[i]
@@ -169,7 +169,7 @@ func PrintAck(opts AckOptions) error {
 			}
 
 			// Capture current output
-			captured, err := tmux.CapturePaneOutput(targetPane.ID, 20)
+			captured, err := zellij.CapturePaneOutput(targetPane.ID, 20)
 			if err != nil {
 				stillPending = append(stillPending, paneKey)
 				continue
@@ -395,7 +395,7 @@ func PrintSendAndAck(opts SendAndAckOptions) error {
 	// First, send the message
 	sentAt := time.Now().UTC()
 
-	if !tmux.SessionExists(opts.Session) {
+	if !zellij.SessionExists(opts.Session) {
 		return encodeJSON(SendAndAckOutput{
 			Send: SendOutput{
 				Session:        opts.Session,
@@ -416,7 +416,7 @@ func PrintSendAndAck(opts SendAndAckOptions) error {
 		})
 	}
 
-	panes, err := tmux.GetPanes(opts.Session)
+	panes, err := zellij.GetPanes(opts.Session)
 	if err != nil {
 		return encodeJSON(SendAndAckOutput{
 			Send: SendOutput{
@@ -459,7 +459,7 @@ func PrintSendAndAck(opts SendAndAckOptions) error {
 	hasTypeFilter := len(typeFilterMap) > 0
 
 	// Determine target panes and capture initial state
-	var targetPanes []tmux.Pane
+	var targetPanes []zellij.Pane
 	var targetKeys []string
 	initialStates := make(map[string]string)
 
@@ -495,7 +495,7 @@ func PrintSendAndAck(opts SendAndAckOptions) error {
 		targetKeys = append(targetKeys, paneKey)
 
 		// Capture initial state before sending
-		captured, err := tmux.CapturePaneOutput(pane.ID, 20)
+		captured, err := zellij.CapturePaneOutput(pane.ID, 20)
 		if err == nil {
 			initialStates[paneKey] = stripANSI(captured)
 		}
@@ -518,7 +518,7 @@ func PrintSendAndAck(opts SendAndAckOptions) error {
 			time.Sleep(time.Duration(opts.DelayMs) * time.Millisecond)
 		}
 
-		err := tmux.SendKeys(pane.ID, opts.Message, true)
+		err := zellij.SendKeys(pane.ID, opts.Message, true)
 		if err != nil {
 			sendOutput.Failed = append(sendOutput.Failed, SendError{
 				Pane:  paneKey,
@@ -558,7 +558,7 @@ func PrintSendAndAck(opts SendAndAckOptions) error {
 		stillPending := []string{}
 
 		for _, paneKey := range ackOutput.Pending {
-			var targetPane *tmux.Pane
+			var targetPane *zellij.Pane
 			for i := range targetPanes {
 				if fmt.Sprintf("%d", targetPanes[i].Index) == paneKey {
 					targetPane = &targetPanes[i]
@@ -571,7 +571,7 @@ func PrintSendAndAck(opts SendAndAckOptions) error {
 				continue
 			}
 
-			captured, err := tmux.CapturePaneOutput(targetPane.ID, 20)
+			captured, err := zellij.CapturePaneOutput(targetPane.ID, 20)
 			if err != nil {
 				stillPending = append(stillPending, paneKey)
 				continue

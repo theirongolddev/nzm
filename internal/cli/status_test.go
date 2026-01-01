@@ -10,13 +10,13 @@ import (
 	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/config"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // TestStatusRealSession tests status command output with a real tmux session
 func TestStatusRealSession(t *testing.T) {
-	if !tmux.IsInstalled() {
-		t.Skip("tmux not installed")
+	if !zellij.IsInstalled() {
+		t.Skip("zellij not installed")
 	}
 
 	// Setup temp dir for projects
@@ -43,7 +43,7 @@ func TestStatusRealSession(t *testing.T) {
 
 	sessionName := fmt.Sprintf("ntm-test-status-%d", time.Now().UnixNano())
 	defer func() {
-		_ = tmux.KillSession(sessionName)
+		_ = zellij.KillSession(sessionName)
 	}()
 
 	// Define agents

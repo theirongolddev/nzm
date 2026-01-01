@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // Restore recreates a session from saved state.
@@ -19,11 +19,11 @@ func Restore(state *SessionState, opts RestoreOptions) error {
 	}
 
 	// Check if session already exists
-	if tmux.SessionExists(name) {
+	if zellij.SessionExists(name) {
 		if !opts.Force {
 			return fmt.Errorf("session '%s' already exists (use --force to overwrite)", name)
 		}
-		if err := tmux.KillSession(name); err != nil {
+		if err := zellij.KillSession(name); err != nil {
 			return fmt.Errorf("killing existing session: %w", err)
 		}
 	}
@@ -53,7 +53,7 @@ func Restore(state *SessionState, opts RestoreOptions) error {
 	}
 
 	// Create the session
-	if err := tmux.CreateSession(name, workDir); err != nil {
+	if err := zellij.CreateSession(name, workDir); err != nil {
 		return fmt.Errorf("creating session: %w", err)
 	}
 
@@ -61,14 +61,14 @@ func Restore(state *SessionState, opts RestoreOptions) error {
 	totalPanes := len(state.Panes)
 	if totalPanes > 1 {
 		for i := 1; i < totalPanes; i++ {
-			if _, err := tmux.SplitWindow(name, workDir); err != nil {
+			if _, err := zellij.SplitWindow(name, workDir); err != nil {
 				return fmt.Errorf("creating pane %d: %w", i+1, err)
 			}
 		}
 	}
 
 	// Get pane list
-	panes, err := tmux.GetPanes(name)
+	panes, err := zellij.GetPanes(name)
 	if err != nil {
 		return fmt.Errorf("getting panes: %w", err)
 	}
@@ -79,7 +79,7 @@ func Restore(state *SessionState, opts RestoreOptions) error {
 			break
 		}
 		if paneState.Title != "" {
-			if err := tmux.SetPaneTitle(panes[i].ID, paneState.Title); err != nil {
+			if err := zellij.SetPaneTitle(panes[i].ID, paneState.Title); err != nil {
 				// Non-fatal - continue with other panes
 				continue
 			}
@@ -106,7 +106,7 @@ func Restore(state *SessionState, opts RestoreOptions) error {
 // RestoreAgents launches the agents in the restored session.
 // This is separated from Restore to allow for customization.
 func RestoreAgents(sessionName string, state *SessionState, cmds AgentCommands) error {
-	panes, err := tmux.GetPanes(sessionName)
+	panes, err := zellij.GetPanes(sessionName)
 	if err != nil {
 		return fmt.Errorf("getting panes: %w", err)
 	}
@@ -117,7 +117,7 @@ func RestoreAgents(sessionName string, state *SessionState, cmds AgentCommands) 
 		}
 
 		// Skip user panes
-		if paneState.AgentType == string(tmux.AgentUser) || paneState.AgentType == "user" {
+		if paneState.AgentType == string(zellij.AgentUser) || paneState.AgentType == "user" {
 			continue
 		}
 
@@ -128,17 +128,17 @@ func RestoreAgents(sessionName string, state *SessionState, cmds AgentCommands) 
 		}
 
 		// Launch agent
-		safeAgentCmd, err := tmux.SanitizePaneCommand(agentCmd)
+		safeAgentCmd, err := zellij.SanitizePaneCommand(agentCmd)
 		if err != nil {
 			continue
 		}
 
-		cmd, err := tmux.BuildPaneCommand(state.WorkDir, safeAgentCmd)
+		cmd, err := zellij.BuildPaneCommand(state.WorkDir, safeAgentCmd)
 		if err != nil {
 			continue
 		}
 
-		if err := tmux.SendKeys(panes[i].ID, cmd, true); err != nil {
+		if err := zellij.SendKeys(panes[i].ID, cmd, true); err != nil {
 			// Non-fatal - continue with other agents
 			continue
 		}
@@ -161,27 +161,13 @@ func getAgentCommand(agentType string, cmds AgentCommands) string {
 	}
 }
 
-// applyLayout applies a tmux layout to the session.
+// applyLayout applies a layout to the session.
+// Zellij layouts are applied at session creation time via KDL files,
+// not dynamically like tmux. This is a no-op for Zellij.
 func applyLayout(session, layout string) error {
-	if layout == "" {
-		layout = "tiled"
-	}
-
-	// Get first window
-	output, err := tmux.DefaultClient.Run("list-windows", "-t", session, "-F", "#{window_index}")
-	if err != nil {
-		return err
-	}
-
-	windows := strings.Split(strings.TrimSpace(output), "\n")
-	for _, win := range windows {
-		if win == "" {
-			continue
-		}
-		target := fmt.Sprintf("%s:%s", session, win)
-		_ = tmux.DefaultClient.RunSilent("select-layout", "-t", target, layout)
-	}
-
+	// Zellij doesn't support dynamic layout changes like tmux.
+	// Layouts are defined in KDL files at session creation.
+	// This function is kept for API compatibility but does nothing.
 	return nil
 }
 

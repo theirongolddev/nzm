@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // Status represents the overall health status of an agent
@@ -132,11 +132,11 @@ var idlePromptPatterns = []string{
 
 // CheckSession performs health checks on all agents in a session
 func CheckSession(session string) (*SessionHealth, error) {
-	if !tmux.SessionExists(session) {
+	if !zellij.SessionExists(session) {
 		return nil, &SessionNotFoundError{Session: session}
 	}
 
-	panesWithActivity, err := tmux.GetPanesWithActivity(session)
+	panesWithActivity, err := zellij.GetPanesWithActivity(session)
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +154,7 @@ func CheckSession(session string) (*SessionHealth, error) {
 
 	for _, pa := range panesWithActivity {
 		wg.Add(1)
-		go func(pa tmux.PaneActivity) {
+		go func(pa zellij.PaneActivity) {
 			defer wg.Done()
 			agentHealth := checkAgent(pa)
 
@@ -188,7 +188,7 @@ func CheckSession(session string) (*SessionHealth, error) {
 }
 
 // checkAgent performs health checks on a single agent pane
-func checkAgent(pa tmux.PaneActivity) AgentHealth {
+func checkAgent(pa zellij.PaneActivity) AgentHealth {
 	agent := AgentHealth{
 		Pane:          pa.Pane.Index,
 		PaneID:        pa.Pane.ID,
@@ -206,7 +206,7 @@ func checkAgent(pa tmux.PaneActivity) AgentHealth {
 	}
 
 	// Capture pane output for analysis
-	output, err := tmux.CapturePaneOutput(pa.Pane.ID, 50)
+	output, err := zellij.CapturePaneOutput(pa.Pane.ID, 50)
 	if err != nil {
 		agent.ProcessStatus = ProcessUnknown
 		agent.Status = StatusUnknown

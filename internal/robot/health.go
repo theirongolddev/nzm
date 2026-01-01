@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/bv"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // HealthOutput provides a focused project health summary for AI agents
@@ -143,7 +143,7 @@ func PrintHealth() error {
 // getSystemHealth returns system-level health metrics
 func getSystemHealth() SystemHealthInfo {
 	info := SystemHealthInfo{
-		TmuxOK: tmux.IsInstalled(),
+		TmuxOK: zellij.IsInstalled(),
 	}
 
 	// Get disk free space (platform-specific)
@@ -237,7 +237,7 @@ func populateAgentHealth(output *HealthOutput) {
 		return
 	}
 
-	sessions, err := tmux.ListSessions()
+	sessions, err := zellij.ListSessions()
 	if err != nil {
 		output.Alerts = append(output.Alerts, fmt.Sprintf("failed to list sessions: %v", err))
 		return
@@ -249,7 +249,7 @@ func populateAgentHealth(output *HealthOutput) {
 			Agents:  make(map[string]AgentHealthInfo),
 		}
 
-		panes, err := tmux.GetPanes(sess.Name)
+		panes, err := zellij.GetPanes(sess.Name)
 		if err != nil {
 			output.Alerts = append(output.Alerts, fmt.Sprintf("%s: failed to get panes: %v", sess.Name, err))
 			sessHealth.Healthy = false
@@ -275,7 +275,7 @@ func populateAgentHealth(output *HealthOutput) {
 }
 
 // getAgentHealth calculates health metrics for a single agent pane
-func getAgentHealth(session string, pane tmux.Pane) AgentHealthInfo {
+func getAgentHealth(session string, pane zellij.Pane) AgentHealthInfo {
 	health := AgentHealthInfo{
 		Responsive:      true,
 		OutputRate:      "unknown",
@@ -283,7 +283,7 @@ func getAgentHealth(session string, pane tmux.Pane) AgentHealthInfo {
 	}
 
 	// Get pane activity time
-	activityTime, err := tmux.GetPaneActivity(pane.ID)
+	activityTime, err := zellij.GetPaneActivity(pane.ID)
 	if err == nil {
 		health.LastActivitySec = int(time.Since(activityTime).Seconds())
 
@@ -298,7 +298,7 @@ func getAgentHealth(session string, pane tmux.Pane) AgentHealthInfo {
 	health.OutputRate = calculateOutputRate(health.LastActivitySec)
 
 	// Capture recent output to detect error states
-	captured, err := tmux.CapturePaneOutput(pane.ID, 20)
+	captured, err := zellij.CapturePaneOutput(pane.ID, 20)
 	if err == nil {
 		lines := splitLines(stripANSI(captured))
 		state := detectState(lines, pane.Title)

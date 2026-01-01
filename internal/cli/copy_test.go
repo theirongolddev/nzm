@@ -5,11 +5,11 @@ import (
 	"testing"
 
 	"github.com/Dicklesworthstone/ntm/internal/clipboard"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 func TestPaneMatchesSelector(t *testing.T) {
-	pane := tmux.Pane{ID: "%12", Index: 3}
+	pane := zellij.Pane{ID: "%12", Index: 3}
 
 	cases := []struct {
 		sel     string
@@ -134,31 +134,31 @@ func TestAgentFilter_Matches(t *testing.T) {
 	tests := []struct {
 		name      string
 		filter    AgentFilter
-		agentType tmux.AgentType
+		agentType zellij.AgentType
 		want      bool
 	}{
 		// All flag matches everything
-		{"all_matches_claude", AgentFilter{All: true}, tmux.AgentClaude, true},
-		{"all_matches_codex", AgentFilter{All: true}, tmux.AgentCodex, true},
-		{"all_matches_gemini", AgentFilter{All: true}, tmux.AgentGemini, true},
-		{"all_matches_user", AgentFilter{All: true}, tmux.AgentUser, true},
-		{"all_matches_other", AgentFilter{All: true}, tmux.AgentType("other"), true},
+		{"all_matches_claude", AgentFilter{All: true}, zellij.AgentClaude, true},
+		{"all_matches_codex", AgentFilter{All: true}, zellij.AgentCodex, true},
+		{"all_matches_gemini", AgentFilter{All: true}, zellij.AgentGemini, true},
+		{"all_matches_user", AgentFilter{All: true}, zellij.AgentUser, true},
+		{"all_matches_other", AgentFilter{All: true}, zellij.AgentType("other"), true},
 
 		// Specific filters
-		{"claude_filter_matches_claude", AgentFilter{Claude: true}, tmux.AgentClaude, true},
-		{"claude_filter_not_matches_codex", AgentFilter{Claude: true}, tmux.AgentCodex, false},
-		{"codex_filter_matches_codex", AgentFilter{Codex: true}, tmux.AgentCodex, true},
-		{"codex_filter_not_matches_claude", AgentFilter{Codex: true}, tmux.AgentClaude, false},
-		{"gemini_filter_matches_gemini", AgentFilter{Gemini: true}, tmux.AgentGemini, true},
-		{"gemini_filter_not_matches_user", AgentFilter{Gemini: true}, tmux.AgentUser, false},
+		{"claude_filter_matches_claude", AgentFilter{Claude: true}, zellij.AgentClaude, true},
+		{"claude_filter_not_matches_codex", AgentFilter{Claude: true}, zellij.AgentCodex, false},
+		{"codex_filter_matches_codex", AgentFilter{Codex: true}, zellij.AgentCodex, true},
+		{"codex_filter_not_matches_claude", AgentFilter{Codex: true}, zellij.AgentClaude, false},
+		{"gemini_filter_matches_gemini", AgentFilter{Gemini: true}, zellij.AgentGemini, true},
+		{"gemini_filter_not_matches_user", AgentFilter{Gemini: true}, zellij.AgentUser, false},
 
 		// Empty filter matches nothing
-		{"empty_not_matches_claude", AgentFilter{}, tmux.AgentClaude, false},
-		{"empty_not_matches_user", AgentFilter{}, tmux.AgentUser, false},
+		{"empty_not_matches_claude", AgentFilter{}, zellij.AgentClaude, false},
+		{"empty_not_matches_user", AgentFilter{}, zellij.AgentUser, false},
 
 		// User and other types never match with specific filters
-		{"claude_not_matches_user", AgentFilter{Claude: true}, tmux.AgentUser, false},
-		{"all_filters_not_match_other", AgentFilter{Claude: true, Codex: true, Gemini: true}, tmux.AgentType("other"), false},
+		{"claude_not_matches_user", AgentFilter{Claude: true}, zellij.AgentUser, false},
+		{"all_filters_not_match_other", AgentFilter{Claude: true, Codex: true, Gemini: true}, zellij.AgentType("other"), false},
 	}
 
 	for _, tt := range tests {
@@ -233,19 +233,19 @@ func TestFilterOutput_CaseInsensitivePattern(t *testing.T) {
 func TestPaneMatchesSelector_EdgeCases(t *testing.T) {
 	tests := []struct {
 		name     string
-		pane     tmux.Pane
+		pane     zellij.Pane
 		selector string
 		want     bool
 	}{
-		{"empty_selector", tmux.Pane{ID: "%1", Index: 0}, "", false},
-		{"zero_index", tmux.Pane{ID: "%0", Index: 0}, "0", true},
-		{"large_index", tmux.Pane{ID: "%999", Index: 999}, "999", true},
-		{"negative_index_string", tmux.Pane{ID: "%1", Index: 1}, "-1", false},
-		{"id_without_percent", tmux.Pane{ID: "%42", Index: 0}, "42", false}, // numeric hits index first
-		{"id_with_percent", tmux.Pane{ID: "%42", Index: 0}, "%42", true},
-		{"suffix_match", tmux.Pane{ID: "1.2", Index: 0}, "1.2", true},
-		{"suffix_partial", tmux.Pane{ID: "session:1.2", Index: 0}, "1.2", true},
-		{"no_suffix_match", tmux.Pane{ID: "%5", Index: 3}, "1.2", false},
+		{"empty_selector", zellij.Pane{ID: "%1", Index: 0}, "", false},
+		{"zero_index", zellij.Pane{ID: "%0", Index: 0}, "0", true},
+		{"large_index", zellij.Pane{ID: "%999", Index: 999}, "999", true},
+		{"negative_index_string", zellij.Pane{ID: "%1", Index: 1}, "-1", false},
+		{"id_without_percent", zellij.Pane{ID: "%42", Index: 0}, "42", false}, // numeric hits index first
+		{"id_with_percent", zellij.Pane{ID: "%42", Index: 0}, "%42", true},
+		{"suffix_match", zellij.Pane{ID: "1.2", Index: 0}, "1.2", true},
+		{"suffix_partial", zellij.Pane{ID: "session:1.2", Index: 0}, "1.2", true},
+		{"no_suffix_match", zellij.Pane{ID: "%5", Index: 3}, "1.2", false},
 	}
 
 	for _, tt := range tests {

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/config"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // SpawnOptions configures the robot-spawn operation.
@@ -62,13 +62,13 @@ func PrintSpawn(opts SpawnOptions, cfg *config.Config) error {
 	}
 
 	// Validate session name
-	if err := tmux.ValidateSessionName(opts.Session); err != nil {
+	if err := zellij.ValidateSessionName(opts.Session); err != nil {
 		output.Error = fmt.Sprintf("invalid session name: %v", err)
 		return encodeJSON(output)
 	}
 
 	// Check tmux availability
-	if !tmux.IsInstalled() {
+	if !zellij.IsInstalled() {
 		output.Error = "tmux is not installed"
 		return encodeJSON(output)
 	}
@@ -156,8 +156,8 @@ func PrintSpawn(opts SpawnOptions, cfg *config.Config) error {
 
 	// Create session if it doesn't exist
 	sessionCreated := false
-	if !tmux.SessionExists(opts.Session) {
-		if err := tmux.CreateSession(opts.Session, dir); err != nil {
+	if !zellij.SessionExists(opts.Session) {
+		if err := zellij.CreateSession(opts.Session, dir); err != nil {
 			output.Error = fmt.Sprintf("creating session: %v", err)
 			return encodeJSON(output)
 		}
@@ -165,7 +165,7 @@ func PrintSpawn(opts SpawnOptions, cfg *config.Config) error {
 	}
 
 	// Get current panes
-	panes, err := tmux.GetPanes(opts.Session)
+	panes, err := zellij.GetPanes(opts.Session)
 	if err != nil {
 		output.Error = fmt.Sprintf("getting panes: %v", err)
 		return encodeJSON(output)
@@ -176,7 +176,7 @@ func PrintSpawn(opts SpawnOptions, cfg *config.Config) error {
 	if existingPanes < totalPanes {
 		toAdd := totalPanes - existingPanes
 		for i := 0; i < toAdd; i++ {
-			if _, err := tmux.SplitWindow(opts.Session, dir); err != nil {
+			if _, err := zellij.SplitWindow(opts.Session, dir); err != nil {
 				output.Error = fmt.Sprintf("creating pane: %v", err)
 				return encodeJSON(output)
 			}
@@ -184,14 +184,14 @@ func PrintSpawn(opts SpawnOptions, cfg *config.Config) error {
 	}
 
 	// Get updated pane list
-	panes, err = tmux.GetPanes(opts.Session)
+	panes, err = zellij.GetPanes(opts.Session)
 	if err != nil {
 		output.Error = fmt.Sprintf("getting panes: %v", err)
 		return encodeJSON(output)
 	}
 
 	// Apply tiled layout
-	_ = tmux.ApplyTiledLayout(opts.Session)
+	_ = zellij.ApplyTiledLayout(opts.Session)
 
 	// Start assigning agents (skip first pane if user pane)
 	startIdx := 0
@@ -253,7 +253,7 @@ func PrintSpawn(opts SpawnOptions, cfg *config.Config) error {
 }
 
 // launchAgent launches a single agent and returns its info.
-func launchAgent(pane tmux.Pane, session, agentType string, num int, dir, command string) SpawnedAgent {
+func launchAgent(pane zellij.Pane, session, agentType string, num int, dir, command string) SpawnedAgent {
 	startTime := time.Now()
 
 	title := fmt.Sprintf("%s__%s_%d", session, agentTypeShort(agentType), num)
@@ -265,28 +265,28 @@ func launchAgent(pane tmux.Pane, session, agentType string, num int, dir, comman
 	}
 
 	// Set pane title
-	if err := tmux.SetPaneTitle(pane.ID, title); err != nil {
+	if err := zellij.SetPaneTitle(pane.ID, title); err != nil {
 		agent.Error = fmt.Sprintf("setting title: %v", err)
 		agent.StartupMs = time.Since(startTime).Milliseconds()
 		return agent
 	}
 
 	// Launch agent command
-	safeCommand, err := tmux.SanitizePaneCommand(command)
+	safeCommand, err := zellij.SanitizePaneCommand(command)
 	if err != nil {
 		agent.Error = fmt.Sprintf("invalid command: %v", err)
 		agent.StartupMs = time.Since(startTime).Milliseconds()
 		return agent
 	}
 
-	cmd, err := tmux.BuildPaneCommand(dir, safeCommand)
+	cmd, err := zellij.BuildPaneCommand(dir, safeCommand)
 	if err != nil {
 		agent.Error = fmt.Sprintf("building command: %v", err)
 		agent.StartupMs = time.Since(startTime).Milliseconds()
 		return agent
 	}
 
-	if err := tmux.SendKeys(pane.ID, cmd, true); err != nil {
+	if err := zellij.SendKeys(pane.ID, cmd, true); err != nil {
 		agent.Error = fmt.Sprintf("launching: %v", err)
 		agent.StartupMs = time.Since(startTime).Milliseconds()
 		return agent
@@ -319,7 +319,7 @@ func waitForAgentsReady(output *SpawnOutput, timeout time.Duration) {
 			}
 
 			// Capture pane output
-			captured, err := tmux.CapturePaneOutput(paneID, 10)
+			captured, err := zellij.CapturePaneOutput(paneID, 10)
 			if err != nil {
 				allReady = false
 				continue

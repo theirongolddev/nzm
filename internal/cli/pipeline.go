@@ -12,7 +12,7 @@ import (
 
 	"github.com/Dicklesworthstone/ntm/internal/output"
 	"github.com/Dicklesworthstone/ntm/internal/pipeline"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 func newPipelineCmd() *cobra.Command {
@@ -100,11 +100,11 @@ Examples:
 				return fmt.Errorf("--session is required")
 			}
 
-			if err := tmux.EnsureInstalled(); err != nil {
+			if err := zellij.EnsureInstalled(); err != nil {
 				return err
 			}
 
-			if !tmux.SessionExists(session) {
+			if !zellij.SessionExists(session) {
 				return fmt.Errorf("session %q not found", session)
 			}
 
@@ -431,11 +431,11 @@ Examples:
 				})
 			}
 
-			if err := tmux.EnsureInstalled(); err != nil {
+			if err := zellij.EnsureInstalled(); err != nil {
 				return err
 			}
 
-			if !tmux.SessionExists(session) {
+			if !zellij.SessionExists(session) {
 				return fmt.Errorf("session %q not found", session)
 			}
 

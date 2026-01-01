@@ -116,8 +116,8 @@ func TestConvertPaneInfo(t *testing.T) {
 
 	pane := ConvertPaneInfo(info)
 
-	if pane.ID != 1 {
-		t.Errorf("expected ID 1, got %d", pane.ID)
+	if pane.ID != "1" {
+		t.Errorf("expected ID \"1\", got %q", pane.ID)
 	}
 	if pane.Type != AgentClaude {
 		t.Errorf("expected AgentClaude, got %v", pane.Type)

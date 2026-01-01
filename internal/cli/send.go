@@ -21,7 +21,7 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/prompt"
 	"github.com/Dicklesworthstone/ntm/internal/robot"
 	"github.com/Dicklesworthstone/ntm/internal/templates"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // SendResult is the JSON output for the send command.
@@ -171,7 +171,7 @@ func (s SendTargets) HasTargetsForType(t AgentType) bool {
 }
 
 // MatchesPane checks if any target matches the given pane
-func (s SendTargets) MatchesPane(pane tmux.Pane) bool {
+func (s SendTargets) MatchesPane(pane zellij.Pane) bool {
 	for _, target := range s {
 		if matchesSendTarget(pane, target) {
 			return true
@@ -181,7 +181,7 @@ func (s SendTargets) MatchesPane(pane tmux.Pane) bool {
 }
 
 // matchesSendTarget checks if a pane matches a send target
-func matchesSendTarget(pane tmux.Pane, target SendTarget) bool {
+func matchesSendTarget(pane zellij.Pane, target SendTarget) bool {
 	// Type must match
 	if string(pane.Type) != string(target.Type) {
 		return false
@@ -629,11 +629,11 @@ func runSendInternal(opts SendOptions) error {
 		}
 	}
 
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := zellij.EnsureInstalled(); err != nil {
 		return outputError(err)
 	}
 
-	if !tmux.SessionExists(session) {
+	if !zellij.SessionExists(session) {
 		return outputError(fmt.Errorf("session '%s' not found", session))
 	}
 
@@ -714,7 +714,7 @@ func runSendInternal(opts SendOptions) error {
 		}
 	}
 
-	panes, err := tmux.GetPanes(session)
+	panes, err := zellij.GetPanes(session)
 	if err != nil {
 		return outputError(err)
 	}
@@ -734,7 +734,7 @@ func runSendInternal(opts SendOptions) error {
 			if p.Index == paneIndex {
 				targetPanes = append(targetPanes, paneIndex)
 				histTargets = targetPanes
-				if err := tmux.PasteKeys(p.ID, prompt, true); err != nil {
+				if err := zellij.PasteKeys(p.ID, prompt, true); err != nil {
 					failed++
 					histErr = err
 					if jsonOutput {
@@ -808,13 +808,13 @@ func runSendInternal(opts SendOptions) error {
 					}
 				} else {
 					match := false
-					if targetCC && p.Type == tmux.AgentClaude {
+					if targetCC && p.Type == zellij.AgentClaude {
 						match = true
 					}
-					if targetCod && p.Type == tmux.AgentCodex {
+					if targetCod && p.Type == zellij.AgentCodex {
 						match = true
 					}
-					if targetGmi && p.Type == tmux.AgentGemini {
+					if targetGmi && p.Type == zellij.AgentGemini {
 						match = true
 					}
 					if !match {
@@ -824,13 +824,13 @@ func runSendInternal(opts SendOptions) error {
 			}
 		} else if noFilter {
 			// Default mode: skip non-agent panes
-			if p.Type == tmux.AgentUser {
+			if p.Type == zellij.AgentUser {
 				continue
 			}
 		}
 
 		targetPanes = append(targetPanes, p.Index)
-		if err := tmux.PasteKeys(p.ID, prompt, true); err != nil {
+		if err := zellij.PasteKeys(p.ID, prompt, true); err != nil {
 			failed++
 			histErr = err
 			if !jsonOutput {
@@ -936,15 +936,15 @@ Examples:
 }
 
 func runInterrupt(session string, tags []string) error {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := zellij.EnsureInstalled(); err != nil {
 		return err
 	}
 
-	if !tmux.SessionExists(session) {
+	if !zellij.SessionExists(session) {
 		return fmt.Errorf("session '%s' not found", session)
 	}
 
-	panes, err := tmux.GetPanes(session)
+	panes, err := zellij.GetPanes(session)
 	if err != nil {
 		return err
 	}
@@ -952,7 +952,7 @@ func runInterrupt(session string, tags []string) error {
 	count := 0
 	for _, p := range panes {
 		// Only interrupt agent panes
-		if p.Type == tmux.AgentClaude || p.Type == tmux.AgentCodex || p.Type == tmux.AgentGemini {
+		if p.Type == zellij.AgentClaude || p.Type == zellij.AgentCodex || p.Type == zellij.AgentGemini {
 			// Check tags
 			if len(tags) > 0 {
 				if !HasAnyTag(p.Tags, tags) {
@@ -960,7 +960,7 @@ func runInterrupt(session string, tags []string) error {
 				}
 			}
 
-			if err := tmux.SendInterrupt(p.ID); err != nil {
+			if err := zellij.SendInterrupt(p.ID); err != nil {
 				return fmt.Errorf("interrupting pane %d: %w", p.Index, err)
 			}
 			count++
@@ -978,8 +978,8 @@ func newKillCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "kill <session>",
-		Short: "Kill a tmux session",
-		Long: `Kill a tmux session and all its panes.
+		Short: "Kill a Zellij session",
+		Long: `Kill a Zellij session and all its panes.
 
 Examples:
   ntm kill myproject           # Prompts for confirmation
@@ -999,11 +999,11 @@ Examples:
 }
 
 func runKill(session string, force bool, tags []string, noHooks bool) error {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := zellij.EnsureInstalled(); err != nil {
 		return err
 	}
 
-	if !tmux.SessionExists(session) {
+	if !zellij.SessionExists(session) {
 		return fmt.Errorf("session '%s' not found", session)
 	}
 
@@ -1050,12 +1050,12 @@ func runKill(session string, force bool, tags []string, noHooks bool) error {
 
 	// If tags are provided, kill specific panes
 	if len(tags) > 0 {
-		panes, err := tmux.GetPanes(session)
+		panes, err := zellij.GetPanes(session)
 		if err != nil {
 			return err
 		}
 
-		var toKill []tmux.Pane
+		var toKill []zellij.Pane
 		for _, p := range panes {
 			if HasAnyTag(p.Tags, tags) {
 				toKill = append(toKill, p)
@@ -1075,7 +1075,7 @@ func runKill(session string, force bool, tags []string, noHooks bool) error {
 		}
 
 		for _, p := range toKill {
-			if err := tmux.KillPane(p.ID); err != nil {
+			if err := zellij.KillPane(p.ID); err != nil {
 				return fmt.Errorf("killing pane %s: %w", p.ID, err)
 			}
 		}
@@ -1084,7 +1084,7 @@ func runKill(session string, force bool, tags []string, noHooks bool) error {
 	}
 
 	if !force {
-		panes, err := tmux.GetPanes(session)
+		panes, err := zellij.GetPanes(session)
 		if err != nil {
 			return err
 		}
@@ -1095,7 +1095,7 @@ func runKill(session string, force bool, tags []string, noHooks bool) error {
 		}
 	}
 
-	if err := tmux.KillSession(session); err != nil {
+	if err := zellij.KillSession(session); err != nil {
 		return err
 	}
 

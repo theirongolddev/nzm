@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // AuthState represents the current state of authentication
@@ -42,7 +42,7 @@ func NewClaudeAuthFlow(isRemote bool) *ClaudeAuthFlow {
 
 // InitiateAuth starts the authentication process
 func (f *ClaudeAuthFlow) InitiateAuth(paneID string) error {
-	return tmux.SendKeys(paneID, "/login", true)
+	return zellij.SendKeys(paneID, "/login", true)
 }
 
 // MonitorAuth watches the pane output for auth prompts and handles them
@@ -55,7 +55,7 @@ func (f *ClaudeAuthFlow) MonitorAuth(ctx context.Context, paneID string) (*AuthR
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case <-ticker.C:
-			output, _ := tmux.CapturePaneOutput(paneID, 30)
+			output, _ := zellij.CapturePaneOutput(paneID, 30)
 
 			// Check for success
 			if f.DetectAuthSuccess(output) {
@@ -94,7 +94,7 @@ func (f *ClaudeAuthFlow) SendContinuation(paneID, prompt string) error {
 	time.Sleep(500 * time.Millisecond)
 
 	// Send continuation prompt
-	return tmux.PasteKeys(paneID, prompt, true)
+	return zellij.PasteKeys(paneID, prompt, true)
 }
 
 // claudeLoginURLRegex matches the Claude login URL

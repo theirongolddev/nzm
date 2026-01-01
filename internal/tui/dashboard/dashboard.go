@@ -24,7 +24,7 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/history"
 	"github.com/Dicklesworthstone/ntm/internal/scanner"
 	"github.com/Dicklesworthstone/ntm/internal/status"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 	"github.com/Dicklesworthstone/ntm/internal/tokens"
 	"github.com/Dicklesworthstone/ntm/internal/tracker"
 	"github.com/Dicklesworthstone/ntm/internal/tui/components"
@@ -136,7 +136,7 @@ const (
 type Model struct {
 	session      string
 	projectDir   string
-	panes        []tmux.Pane
+	panes        []zellij.Pane
 	width        int
 	height       int
 	animTick     int
@@ -696,7 +696,7 @@ type PaneOutputData struct {
 }
 
 type SessionDataWithOutputMsg struct {
-	Panes             []tmux.Pane
+	Panes             []zellij.Pane
 	Outputs           []PaneOutputData
 	Duration          time.Duration
 	NextCaptureCursor int
@@ -828,12 +828,12 @@ func (m Model) fetchSessionDataWithOutputsCtx(ctx context.Context) tea.Cmd {
 			ctx = context.Background()
 		}
 
-		panesWithActivity, err := tmux.GetPanesWithActivityContext(ctx, session)
+		panesWithActivity, err := zellij.GetPanesWithActivityContext(ctx, session)
 		if err != nil {
 			return SessionDataWithOutputMsg{Err: err, Duration: time.Since(start)}
 		}
 
-		panes := make([]tmux.Pane, 0, len(panesWithActivity))
+		panes := make([]zellij.Pane, 0, len(panesWithActivity))
 		for _, pane := range panesWithActivity {
 			panes = append(panes, pane.Pane)
 		}
@@ -846,7 +846,7 @@ func (m Model) fetchSessionDataWithOutputsCtx(ctx context.Context) tea.Cmd {
 				return SessionDataWithOutputMsg{Err: err, Duration: time.Since(start)}
 			}
 
-			out, err := tmux.CapturePaneOutputContext(ctx, pane.Pane.ID, outputLines)
+			out, err := zellij.CapturePaneOutputContext(ctx, pane.Pane.ID, outputLines)
 			if err != nil {
 				if ctxErr := ctx.Err(); ctxErr != nil {
 					return SessionDataWithOutputMsg{Err: ctxErr, Duration: time.Since(start)}
@@ -877,14 +877,14 @@ func (m Model) fetchSessionDataWithOutputsCtx(ctx context.Context) tea.Cmd {
 }
 
 type paneCapturePlan struct {
-	Targets    []tmux.PaneActivity
+	Targets    []zellij.PaneActivity
 	NextCursor int
 }
 
-func planPaneCaptures(panes []tmux.PaneActivity, selectedPaneID string, lastCaptured map[string]time.Time, budget int, startCursor int) paneCapturePlan {
-	var candidates []tmux.PaneActivity
+func planPaneCaptures(panes []zellij.PaneActivity, selectedPaneID string, lastCaptured map[string]time.Time, budget int, startCursor int) paneCapturePlan {
+	var candidates []zellij.PaneActivity
 	for _, pane := range panes {
-		if pane.Pane.Type == tmux.AgentUser {
+		if pane.Pane.Type == zellij.AgentUser {
 			continue
 		}
 		candidates = append(candidates, pane)
@@ -911,7 +911,7 @@ func planPaneCaptures(panes []tmux.PaneActivity, selectedPaneID string, lastCapt
 	startCursor = startCursor % len(candidates)
 
 	selected := make(map[string]struct{}, budget)
-	var targets []tmux.PaneActivity
+	var targets []zellij.PaneActivity
 
 	if selectedPaneID != "" {
 		for _, pane := range candidates {
@@ -925,7 +925,7 @@ func planPaneCaptures(panes []tmux.PaneActivity, selectedPaneID string, lastCapt
 	}
 
 	type captureCandidate struct {
-		pane tmux.PaneActivity
+		pane zellij.PaneActivity
 	}
 
 	var needs []captureCandidate
@@ -1279,7 +1279,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 				// Find the pane to get the variant
-				var currentPane tmux.Pane
+				var currentPane zellij.Pane
 				found := false
 				for _, p := range m.panes {
 					if p.ID == data.PaneID {
@@ -1293,21 +1293,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				agentType := "unknown"
 				modelName := ""
 				switch data.AgentType {
-				case string(tmux.AgentClaude):
+				case string(zellij.AgentClaude):
 					agentType = "claude"
 					if m.cfg != nil {
 						modelName = m.cfg.Models.DefaultClaude
 					} else {
 						modelName = "claude-sonnet-4-20250514"
 					}
-				case string(tmux.AgentCodex):
+				case string(zellij.AgentCodex):
 					agentType = "codex"
 					if m.cfg != nil {
 						modelName = m.cfg.Models.DefaultCodex
 					} else {
 						modelName = "gpt-4"
 					}
-				case string(tmux.AgentGemini):
+				case string(zellij.AgentGemini):
 					agentType = "gemini"
 					if m.cfg != nil {
 						modelName = m.cfg.Models.DefaultGemini
@@ -1531,7 +1531,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if len(m.panes) > 0 && m.cursor < len(m.panes) {
 				// Zoom to selected pane
 				p := m.panes[m.cursor]
-				_ = tmux.ZoomPane(m.session, p.Index)
+				_ = zellij.ZoomPane(m.session, p.Index)
 				return m, tea.Quit
 			}
 
@@ -1607,11 +1607,11 @@ func (m *Model) updateStats() {
 
 	for _, p := range m.panes {
 		switch p.Type {
-		case tmux.AgentClaude:
+		case zellij.AgentClaude:
 			m.claudeCount++
-		case tmux.AgentCodex:
+		case zellij.AgentCodex:
 			m.codexCount++
-		case tmux.AgentGemini:
+		case zellij.AgentGemini:
 			m.geminiCount++
 		default:
 			m.userCount++
@@ -2126,15 +2126,15 @@ func (m Model) renderPaneGrid() string {
 		var agentIcon string
 
 		switch p.Type {
-		case tmux.AgentClaude:
+		case zellij.AgentClaude:
 			borderColor = t.Claude
 			iconColor = t.Claude
 			agentIcon = ic.Claude
-		case tmux.AgentCodex:
+		case zellij.AgentCodex:
 			borderColor = t.Codex
 			iconColor = t.Codex
 			agentIcon = ic.Codex
-		case tmux.AgentGemini:
+		case zellij.AgentGemini:
 			borderColor = t.Gemini
 			iconColor = t.Gemini
 			agentIcon = ic.Gemini
@@ -2486,7 +2486,7 @@ func (m Model) renderHeaderContextLine(width int) string {
 	t := m.theme
 
 	var parts []string
-	remote := strings.TrimSpace(tmux.DefaultClient.Remote)
+	remote := strings.TrimSpace(zellij.DefaultClient.Remote)
 	if remote == "" {
 		parts = append(parts, "local")
 	} else {
@@ -3077,13 +3077,13 @@ func (m Model) renderPaneDetail(width int) string {
 	var typeColor lipgloss.Color
 	var typeIcon string
 	switch p.Type {
-	case tmux.AgentClaude:
+	case zellij.AgentClaude:
 		typeColor = t.Claude
 		typeIcon = ic.Claude
-	case tmux.AgentCodex:
+	case zellij.AgentCodex:
 		typeColor = t.Codex
 		typeIcon = ic.Codex
-	case tmux.AgentGemini:
+	case zellij.AgentGemini:
 		typeColor = t.Gemini
 		typeIcon = ic.Gemini
 	default:

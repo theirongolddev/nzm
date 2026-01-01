@@ -11,7 +11,7 @@ import (
 
 	"github.com/Dicklesworthstone/ntm/internal/config"
 	"github.com/Dicklesworthstone/ntm/internal/palette"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 	"github.com/Dicklesworthstone/ntm/internal/watcher"
 )
 
@@ -41,7 +41,7 @@ Examples:
 }
 
 func runPalette(w io.Writer, errW io.Writer, session string) error {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := zellij.EnsureInstalled(); err != nil {
 		return err
 	}
 
@@ -55,7 +55,7 @@ func runPalette(w io.Writer, errW io.Writer, session string) error {
 	res.ExplainIfInferred(errW)
 	session = res.Session
 
-	if !tmux.SessionExists(session) {
+	if !zellij.SessionExists(session) {
 		return fmt.Errorf("session '%s' not found", session)
 	}
 

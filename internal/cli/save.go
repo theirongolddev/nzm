@@ -9,7 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
 )
 
@@ -71,7 +71,7 @@ Examples:
 }
 
 func runSave(w io.Writer, session, outputDir string, lines int, filter AgentFilter) error {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := zellij.EnsureInstalled(); err != nil {
 		return err
 	}
 
@@ -90,7 +90,7 @@ func runSave(w io.Writer, session, outputDir string, lines int, filter AgentFilt
 		session = res.Session
 	}
 
-	if !tmux.SessionExists(session) {
+	if !zellij.SessionExists(session) {
 		return fmt.Errorf("session '%s' not found", session)
 	}
 
@@ -99,13 +99,13 @@ func runSave(w io.Writer, session, outputDir string, lines int, filter AgentFilt
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
-	panes, err := tmux.GetPanes(session)
+	panes, err := zellij.GetPanes(session)
 	if err != nil {
 		return err
 	}
 
 	// Filter panes
-	var targetPanes []tmux.Pane
+	var targetPanes []zellij.Pane
 	for _, p := range panes {
 		if filter.Matches(p.Type) {
 			targetPanes = append(targetPanes, p)
@@ -120,7 +120,7 @@ func runSave(w io.Writer, session, outputDir string, lines int, filter AgentFilt
 	savedFiles := 0
 
 	for _, p := range targetPanes {
-		output, err := tmux.CapturePaneOutput(p.ID, lines)
+		output, err := zellij.CapturePaneOutput(p.ID, lines)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to capture pane %d: %v\n", p.Index, err)
 			continue

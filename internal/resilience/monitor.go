@@ -11,16 +11,16 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/config"
 	"github.com/Dicklesworthstone/ntm/internal/health"
 	"github.com/Dicklesworthstone/ntm/internal/notify"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // Overridable hooks for tests.
 var (
-	sendKeysFn       = tmux.SendKeys
-	buildPaneCmdFn   = tmux.BuildPaneCommand
+	sendKeysFn       = zellij.SendKeys
+	buildPaneCmdFn   = zellij.BuildPaneCommand
 	sleepFn          = time.Sleep
 	checkSessionFn   = health.CheckSession
-	displayMessageFn = tmux.DisplayMessage
+	displayMessageFn = zellij.DisplayMessage
 )
 
 // AgentState tracks the state of an individual agent for restart purposes
@@ -86,7 +86,7 @@ func (m *Monitor) RegisterAgent(paneID string, paneIndex int, agentType, model, 
 
 // ScanAndRegisterAgents discovers agents from existing tmux panes
 func (m *Monitor) ScanAndRegisterAgents() error {
-	panes, err := tmux.GetPanes(m.session)
+	panes, err := zellij.GetPanes(m.session)
 	if err != nil {
 		return err
 	}
@@ -96,7 +96,7 @@ func (m *Monitor) ScanAndRegisterAgents() error {
 
 	for _, p := range panes {
 		// Only monitor agent panes (not user or unknown)
-		if p.Type == tmux.AgentClaude || p.Type == tmux.AgentCodex || p.Type == tmux.AgentGemini {
+		if p.Type == zellij.AgentClaude || p.Type == zellij.AgentCodex || p.Type == zellij.AgentGemini {
 			// Skip if already registered
 			if _, exists := m.agents[p.ID]; exists {
 				continue
@@ -105,11 +105,11 @@ func (m *Monitor) ScanAndRegisterAgents() error {
 			// Reconstruct command template
 			var agentCmdTemplate string
 			switch p.Type {
-			case tmux.AgentClaude:
+			case zellij.AgentClaude:
 				agentCmdTemplate = m.cfg.Agents.Claude
-			case tmux.AgentCodex:
+			case zellij.AgentCodex:
 				agentCmdTemplate = m.cfg.Agents.Codex
-			case tmux.AgentGemini:
+			case zellij.AgentGemini:
 				agentCmdTemplate = m.cfg.Agents.Gemini
 			}
 

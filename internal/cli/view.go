@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
 )
 
@@ -16,13 +16,13 @@ func newViewCmd() *cobra.Command {
 		Use:     "view [session-name]",
 		Aliases: []string{"v", "tile"},
 		Short:   "View all panes in a session (unzoom, tile, attach)",
-		Long: `View all panes in a tmux session by:
+		Long: `View all panes in a Zellij session by:
 1. Unzooming any zoomed panes
 2. Applying tiled layout to all windows
 3. Attaching/switching to the session
 
 If no session is specified:
-- If inside tmux, operates on the current session
+- If inside Zellij, operates on the current session
 - Otherwise, shows a session selector
 
 Examples:
@@ -41,7 +41,7 @@ Examples:
 }
 
 func runView(w io.Writer, session string) error {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := zellij.EnsureInstalled(); err != nil {
 		return err
 	}
 
@@ -57,12 +57,12 @@ func runView(w io.Writer, session string) error {
 	res.ExplainIfInferred(os.Stderr)
 	session = res.Session
 
-	if !tmux.SessionExists(session) {
+	if !zellij.SessionExists(session) {
 		return fmt.Errorf("session '%s' not found", session)
 	}
 
 	// Apply tiled layout (includes unzoom)
-	if err := tmux.ApplyTiledLayout(session); err != nil {
+	if err := zellij.ApplyTiledLayout(session); err != nil {
 		return fmt.Errorf("failed to apply layout: %w", err)
 	}
 
@@ -70,5 +70,5 @@ func runView(w io.Writer, session string) error {
 		colorize(t.Success), colorize(t.Text), session)
 
 	// Attach or switch to session
-	return tmux.AttachOrSwitch(session)
+	return zellij.AttachOrSwitch(session)
 }

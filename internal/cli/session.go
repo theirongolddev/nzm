@@ -14,7 +14,7 @@ import (
 
 	"github.com/Dicklesworthstone/ntm/internal/output"
 	"github.com/Dicklesworthstone/ntm/internal/status"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 	"github.com/Dicklesworthstone/ntm/internal/tui/icons"
 	"github.com/Dicklesworthstone/ntm/internal/tui/layout"
 	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
@@ -24,8 +24,8 @@ func newAttachCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:     "attach <session-name>",
 		Aliases: []string{"a"},
-		Short:   "Attach to a tmux session",
-		Long: `Attach to an existing tmux session. If already inside tmux,
+		Short:   "Attach to a Zellij session",
+		Long: `Attach to an existing Zellij session. If already inside Zellij,
 switches to the target session instead.
 
 If the session doesn't exist, shows available sessions.
@@ -44,14 +44,14 @@ Examples:
 }
 
 func runAttach(session string) error {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := zellij.EnsureInstalled(); err != nil {
 		return err
 	}
 
-	if tmux.SessionExists(session) {
+	if zellij.SessionExists(session) {
 		// Update Agent Mail activity (non-blocking)
 		updateSessionActivity(session)
-		return tmux.AttachOrSwitch(session)
+		return zellij.AttachOrSwitch(session)
 	}
 
 	if IsJSONOutput() {
@@ -77,7 +77,7 @@ func newListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "list",
 		Aliases: []string{"ls", "l"},
-		Short:   "List all tmux sessions",
+		Short:   "List all Zellij sessions",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runList(tags)
 		},
@@ -87,7 +87,7 @@ func newListCmd() *cobra.Command {
 }
 
 func runList(tags []string) error {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := zellij.EnsureInstalled(); err != nil {
 		if IsJSONOutput() {
 			_ = output.PrintJSON(output.NewError(err.Error()))
 			return err
@@ -95,7 +95,7 @@ func runList(tags []string) error {
 		return err
 	}
 
-	sessions, err := tmux.ListSessions()
+	sessions, err := zellij.ListSessions()
 	if err != nil {
 		if IsJSONOutput() {
 			_ = output.PrintJSON(output.NewError(err.Error()))
@@ -106,9 +106,9 @@ func runList(tags []string) error {
 
 	// Filter sessions by tag
 	if len(tags) > 0 {
-		var filtered []tmux.Session
+		var filtered []zellij.Session
 		for _, s := range sessions {
-			panes, err := tmux.GetPanes(s.Name)
+			panes, err := zellij.GetPanes(s.Name)
 			if err == nil {
 				// Check if any pane has matching tag
 				hasTag := false
@@ -138,7 +138,7 @@ func runList(tags []string) error {
 			}
 
 			// Get panes to count agents
-			panes, err := tmux.GetPanes(s.Name)
+			panes, err := zellij.GetPanes(s.Name)
 			if err == nil {
 				item.PaneCount = len(panes)
 
@@ -146,11 +146,11 @@ func runList(tags []string) error {
 				var claudeCount, codexCount, geminiCount, userCount int
 				for _, p := range panes {
 					switch p.Type {
-					case tmux.AgentClaude:
+					case zellij.AgentClaude:
 						claudeCount++
-					case tmux.AgentCodex:
+					case zellij.AgentCodex:
 						codexCount++
-					case tmux.AgentGemini:
+					case zellij.AgentGemini:
 						geminiCount++
 					default:
 						userCount++
@@ -176,7 +176,7 @@ func runList(tags []string) error {
 
 	// Text output
 	if len(sessions) == 0 {
-		fmt.Println("No tmux sessions running")
+		fmt.Println("No Zellij sessions running")
 		return nil
 	}
 
@@ -196,16 +196,16 @@ func runList(tags []string) error {
 
 			// Fetch agents summary
 			agents := "-"
-			panes, err := tmux.GetPanes(s.Name)
+			panes, err := zellij.GetPanes(s.Name)
 			if err == nil {
 				var cc, cod, gmi, user int
 				for _, p := range panes {
 					switch p.Type {
-					case tmux.AgentClaude:
+					case zellij.AgentClaude:
 						cc++
-					case tmux.AgentCodex:
+					case zellij.AgentCodex:
 						cod++
-					case tmux.AgentGemini:
+					case zellij.AgentGemini:
 						gmi++
 					default:
 						user++
@@ -277,11 +277,11 @@ func runStatus(w io.Writer, session string, tags []string) error {
 		return err
 	}
 
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := zellij.EnsureInstalled(); err != nil {
 		return outputError(err)
 	}
 
-	if !tmux.SessionExists(session) {
+	if !zellij.SessionExists(session) {
 		if IsJSONOutput() {
 			return output.PrintJSON(output.StatusResponse{
 				TimestampedResponse: output.NewTimestamped(),
@@ -292,14 +292,14 @@ func runStatus(w io.Writer, session string, tags []string) error {
 		return fmt.Errorf("session '%s' not found", session)
 	}
 
-	panes, err := tmux.GetPanes(session)
+	panes, err := zellij.GetPanes(session)
 	if err != nil {
 		return outputError(err)
 	}
 
 	// Filter panes by tag
 	if len(tags) > 0 {
-		var filtered []tmux.Pane
+		var filtered []zellij.Pane
 		for _, p := range panes {
 			if HasAnyTag(p.Tags, tags) {
 				filtered = append(filtered, p)
@@ -314,11 +314,11 @@ func runStatus(w io.Writer, session string, tags []string) error {
 	var ccCount, codCount, gmiCount, otherCount int
 	for _, p := range panes {
 		switch p.Type {
-		case tmux.AgentClaude:
+		case zellij.AgentClaude:
 			ccCount++
-		case tmux.AgentCodex:
+		case zellij.AgentCodex:
 			codCount++
-		case tmux.AgentGemini:
+		case zellij.AgentGemini:
 			gmiCount++
 		default:
 			otherCount++
@@ -329,7 +329,7 @@ func runStatus(w io.Writer, session string, tags []string) error {
 	if IsJSONOutput() {
 		// Check if session is attached
 		attached := false
-		sessions, _ := tmux.ListSessions()
+		sessions, _ := zellij.ListSessions()
 		for _, s := range sessions {
 			if s.Name == session {
 				attached = s.Attached
@@ -421,13 +421,13 @@ func runStatus(w io.Writer, session string, tags []string) error {
 	for i, p := range panes {
 		var typeColor, typeIcon string
 		switch p.Type {
-		case tmux.AgentClaude:
+		case zellij.AgentClaude:
 			typeColor = claude
 			typeIcon = ic.Claude
-		case tmux.AgentCodex:
+		case zellij.AgentCodex:
 			typeColor = codex
 			typeIcon = ic.Codex
-		case tmux.AgentGemini:
+		case zellij.AgentGemini:
 			typeColor = gemini
 			typeIcon = ic.Gemini
 		default:

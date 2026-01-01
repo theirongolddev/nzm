@@ -12,7 +12,7 @@ import (
 
 	"github.com/Dicklesworthstone/ntm/internal/bv"
 	status "github.com/Dicklesworthstone/ntm/internal/status"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 	"github.com/Dicklesworthstone/ntm/internal/tokens"
 	"github.com/Dicklesworthstone/ntm/internal/tracker"
 	"github.com/Dicklesworthstone/ntm/internal/tui/layout"
@@ -277,7 +277,7 @@ type PaneTableRow struct {
 // file change activity, and lightweight token velocity estimates.
 // The theme is used to assign per-agent border colors.
 func BuildPaneTableRows(
-	panes []tmux.Pane,
+	panes []zellij.Pane,
 	statuses map[string]status.AgentStatus,
 	paneStatus map[int]PaneStatus,
 	beads *bv.BeadsSummary,
@@ -325,7 +325,7 @@ func BuildPaneTableRows(
 	return rows
 }
 
-func fileChangesByPane(panes []tmux.Pane, changes []tracker.RecordedFileChange) map[string]int {
+func fileChangesByPane(panes []zellij.Pane, changes []tracker.RecordedFileChange) map[string]int {
 	counts := make(map[string]int)
 	if len(changes) == 0 {
 		return counts
@@ -348,7 +348,7 @@ func fileChangesByPane(panes []tmux.Pane, changes []tracker.RecordedFileChange) 
 	return counts
 }
 
-func currentBeadForPane(pane tmux.Pane, beads *bv.BeadsSummary) string {
+func currentBeadForPane(pane zellij.Pane, beads *bv.BeadsSummary) string {
 	if beads == nil || !beads.Available {
 		return ""
 	}
@@ -384,7 +384,7 @@ func tokenVelocityFromStatus(st status.AgentStatus) float64 {
 // BuildPaneTableRow aggregates pane metadata into a single row structure.
 // Beads/FileChanges/TokenVelocity are best-effort enrichments and may be empty
 // when upstream data is unavailable.
-func BuildPaneTableRow(pane tmux.Pane, ps PaneStatus, beads []bv.BeadPreview, fileChanges []tracker.RecordedFileChange) PaneTableRow {
+func BuildPaneTableRow(pane zellij.Pane, ps PaneStatus, beads []bv.BeadPreview, fileChanges []tracker.RecordedFileChange) PaneTableRow {
 	row := PaneTableRow{
 		Index:        pane.Index,
 		Type:         string(pane.Type),
@@ -609,7 +609,7 @@ func RenderPaneRow(row PaneTableRow, dims LayoutDimensions, t theme.Theme) strin
 
 // RenderPaneDetail renders the detail panel for a selected pane
 // tick is used for shimmer animation on high context bars
-func RenderPaneDetail(pane tmux.Pane, ps PaneStatus, dims LayoutDimensions, t theme.Theme, tick int) string {
+func RenderPaneDetail(pane zellij.Pane, ps PaneStatus, dims LayoutDimensions, t theme.Theme, tick int) string {
 	var lines []string
 	innerWidth := dims.DetailWidth
 	if innerWidth < 12 {
@@ -635,11 +635,11 @@ func RenderPaneDetail(pane tmux.Pane, ps PaneStatus, dims LayoutDimensions, t th
 	// Type
 	var typeColor lipgloss.Color
 	switch pane.Type {
-	case tmux.AgentClaude:
+	case zellij.AgentClaude:
 		typeColor = t.Claude
-	case tmux.AgentCodex:
+	case zellij.AgentCodex:
 		typeColor = t.Codex
-	case tmux.AgentGemini:
+	case zellij.AgentGemini:
 		typeColor = t.Gemini
 	default:
 		typeColor = t.Green

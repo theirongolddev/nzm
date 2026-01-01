@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/status"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 	"github.com/Dicklesworthstone/ntm/internal/tui/layout"
 )
 
@@ -15,8 +15,8 @@ func TestStatusUpdateSetsPaneStateAndTimestamp(t *testing.T) {
 	t.Parallel()
 
 	m := New("session", "")
-	m.panes = []tmux.Pane{
-		{ID: "%1", Index: 0, Title: "session__cod_1", Type: tmux.AgentCodex},
+	m.panes = []zellij.Pane{
+		{ID: "%1", Index: 0, Title: "session__cod_1", Type: zellij.AgentCodex},
 	}
 	m.paneStatus[0] = PaneStatus{}
 
@@ -70,8 +70,8 @@ func TestViewRendersPanesEvenWhenLastSessionFetchErrored(t *testing.T) {
 	m.height = 30
 	m.tier = layout.TierForWidth(m.width)
 
-	m.panes = []tmux.Pane{
-		{ID: "%1", Index: 0, Title: "session__cod_1", Type: tmux.AgentCodex},
+	m.panes = []zellij.Pane{
+		{ID: "%1", Index: 0, Title: "session__cod_1", Type: zellij.AgentCodex},
 	}
 	m.err = errors.New("tmux refresh failed")
 
@@ -88,11 +88,11 @@ func TestPlanPaneCaptures_PrioritizesSelectedAndNewActivity(t *testing.T) {
 	t.Parallel()
 
 	now := time.Now()
-	panes := []tmux.PaneActivity{
-		{Pane: tmux.Pane{ID: "%0", Index: 0, Type: tmux.AgentUser}, LastActivity: now},
-		{Pane: tmux.Pane{ID: "%1", Index: 1, Type: tmux.AgentCodex}, LastActivity: now.Add(-10 * time.Second)},
-		{Pane: tmux.Pane{ID: "%2", Index: 2, Type: tmux.AgentClaude}, LastActivity: now.Add(-1 * time.Second)},
-		{Pane: tmux.Pane{ID: "%3", Index: 3, Type: tmux.AgentGemini}, LastActivity: now.Add(-5 * time.Second)},
+	panes := []zellij.PaneActivity{
+		{Pane: zellij.Pane{ID: "%0", Index: 0, Type: zellij.AgentUser}, LastActivity: now},
+		{Pane: zellij.Pane{ID: "%1", Index: 1, Type: zellij.AgentCodex}, LastActivity: now.Add(-10 * time.Second)},
+		{Pane: zellij.Pane{ID: "%2", Index: 2, Type: zellij.AgentClaude}, LastActivity: now.Add(-1 * time.Second)},
+		{Pane: zellij.Pane{ID: "%3", Index: 3, Type: zellij.AgentGemini}, LastActivity: now.Add(-5 * time.Second)},
 	}
 
 	lastCaptured := map[string]time.Time{
@@ -117,10 +117,10 @@ func TestPlanPaneCaptures_RoundRobinAdvancesCursor(t *testing.T) {
 	t.Parallel()
 
 	now := time.Now()
-	panes := []tmux.PaneActivity{
-		{Pane: tmux.Pane{ID: "%1", Index: 1, Type: tmux.AgentCodex}, LastActivity: now.Add(-10 * time.Second)},
-		{Pane: tmux.Pane{ID: "%2", Index: 2, Type: tmux.AgentClaude}, LastActivity: now.Add(-10 * time.Second)},
-		{Pane: tmux.Pane{ID: "%3", Index: 3, Type: tmux.AgentGemini}, LastActivity: now.Add(-10 * time.Second)},
+	panes := []zellij.PaneActivity{
+		{Pane: zellij.Pane{ID: "%1", Index: 1, Type: zellij.AgentCodex}, LastActivity: now.Add(-10 * time.Second)},
+		{Pane: zellij.Pane{ID: "%2", Index: 2, Type: zellij.AgentClaude}, LastActivity: now.Add(-10 * time.Second)},
+		{Pane: zellij.Pane{ID: "%3", Index: 3, Type: zellij.AgentGemini}, LastActivity: now.Add(-10 * time.Second)},
 	}
 
 	lastCaptured := map[string]time.Time{
@@ -145,18 +145,18 @@ func TestSessionDataUpdate_SortsPanesAndKeepsSelection(t *testing.T) {
 	t.Parallel()
 
 	m := New("session", "")
-	m.panes = []tmux.Pane{
-		{ID: "%0", Index: 0, Title: "session__user_0", Type: tmux.AgentUser},
-		{ID: "%1", Index: 1, Title: "session__cod_1", Type: tmux.AgentCodex},
-		{ID: "%2", Index: 2, Title: "session__cc_1", Type: tmux.AgentClaude},
+	m.panes = []zellij.Pane{
+		{ID: "%0", Index: 0, Title: "session__user_0", Type: zellij.AgentUser},
+		{ID: "%1", Index: 1, Title: "session__cod_1", Type: zellij.AgentCodex},
+		{ID: "%2", Index: 2, Title: "session__cc_1", Type: zellij.AgentClaude},
 	}
 	m.cursor = 2
 
 	msg := SessionDataWithOutputMsg{
-		Panes: []tmux.Pane{
-			{ID: "%2", Index: 2, Title: "session__cc_1", Type: tmux.AgentClaude},
-			{ID: "%0", Index: 0, Title: "session__user_0", Type: tmux.AgentUser},
-			{ID: "%1", Index: 1, Title: "session__cod_1", Type: tmux.AgentCodex},
+		Panes: []zellij.Pane{
+			{ID: "%2", Index: 2, Title: "session__cc_1", Type: zellij.AgentClaude},
+			{ID: "%0", Index: 0, Title: "session__user_0", Type: zellij.AgentUser},
+			{ID: "%1", Index: 1, Title: "session__cod_1", Type: zellij.AgentCodex},
 		},
 		Duration:          10 * time.Millisecond,
 		NextCaptureCursor: 0,

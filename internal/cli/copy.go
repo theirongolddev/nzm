@@ -14,7 +14,7 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/clipboard"
 	"github.com/Dicklesworthstone/ntm/internal/codeblock"
 	"github.com/Dicklesworthstone/ntm/internal/output"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
 )
 
@@ -110,16 +110,16 @@ func (f AgentFilter) IsEmpty() bool {
 	return !f.All && !f.Claude && !f.Codex && !f.Gemini
 }
 
-func (f AgentFilter) Matches(agentType tmux.AgentType) bool {
+func (f AgentFilter) Matches(agentType zellij.AgentType) bool {
 	if f.All {
 		return true
 	}
 	switch agentType {
-	case tmux.AgentClaude:
+	case zellij.AgentClaude:
 		return f.Claude
-	case tmux.AgentCodex:
+	case zellij.AgentCodex:
 		return f.Codex
-	case tmux.AgentGemini:
+	case zellij.AgentGemini:
 		return f.Gemini
 	default:
 		return false
@@ -149,7 +149,7 @@ type copyResult struct {
 }
 
 func runCopy(w io.Writer, session string, filter AgentFilter, opts CopyOptions) error {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := zellij.EnsureInstalled(); err != nil {
 		return err
 	}
 
@@ -172,22 +172,22 @@ func runCopy(w io.Writer, session string, filter AgentFilter, opts CopyOptions) 
 		session = res.Session
 	}
 
-	if !tmux.SessionExists(session) {
+	if !zellij.SessionExists(session) {
 		return fmt.Errorf("session '%s' not found", session)
 	}
 
-	panes, err := tmux.GetPanes(session)
+	panes, err := zellij.GetPanes(session)
 	if err != nil {
 		return err
 	}
 
 	// Filter panes
-	var targetPanes []tmux.Pane
+	var targetPanes []zellij.Pane
 	if opts.PaneSpec != "" {
 		// Direct pane targeting overrides agent filters
 		for _, p := range panes {
 			if paneMatchesSelector(p, opts.PaneSpec) {
-				targetPanes = []tmux.Pane{p}
+				targetPanes = []zellij.Pane{p}
 				break
 			}
 		}
@@ -195,12 +195,12 @@ func runCopy(w io.Writer, session string, filter AgentFilter, opts CopyOptions) 
 		// No filter: copy from active pane or first pane
 		for _, p := range panes {
 			if p.Active {
-				targetPanes = []tmux.Pane{p}
+				targetPanes = []zellij.Pane{p}
 				break
 			}
 		}
 		if len(targetPanes) == 0 && len(panes) > 0 {
-			targetPanes = []tmux.Pane{panes[0]}
+			targetPanes = []zellij.Pane{panes[0]}
 		}
 	} else {
 		for _, p := range panes {
@@ -228,7 +228,7 @@ func runCopy(w io.Writer, session string, filter AgentFilter, opts CopyOptions) 
 	var outputs []string
 	var paneLabels []string
 	for _, p := range targetPanes {
-		output, err := tmux.CapturePaneOutput(p.ID, opts.Last)
+		output, err := zellij.CapturePaneOutput(p.ID, opts.Last)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to capture pane %d: %v\n", p.Index, err)
 			continue
@@ -323,7 +323,7 @@ func runCopy(w io.Writer, session string, filter AgentFilter, opts CopyOptions) 
 }
 
 // paneMatchesSelector matches pane index or pane ID (with or without % prefix)
-func paneMatchesSelector(p tmux.Pane, selector string) bool {
+func paneMatchesSelector(p zellij.Pane, selector string) bool {
 	if selector == "" {
 		return false
 	}

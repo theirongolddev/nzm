@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/config"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // RoutingConfig holds configuration for agent routing and scoring.
@@ -123,7 +123,7 @@ func NewAgentScorerFromConfig(cfg *config.Config) *AgentScorer {
 // ScoreAgents calculates scores for all agents in a session.
 func (s *AgentScorer) ScoreAgents(session string, prompt string) ([]ScoredAgent, error) {
 	// Get all panes
-	panes, err := tmux.GetPanes(session)
+	panes, err := zellij.GetPanes(session)
 	if err != nil {
 		return nil, err
 	}

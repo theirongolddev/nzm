@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // Capturer handles capturing session state for checkpoints.
@@ -41,7 +41,7 @@ func (c *Capturer) Create(sessionName, name string, opts ...CheckpointOption) (*
 	}
 
 	// Check session exists
-	if !tmux.SessionExists(sessionName) {
+	if !zellij.SessionExists(sessionName) {
 		return nil, fmt.Errorf("session %q does not exist", sessionName)
 	}
 
@@ -103,7 +103,7 @@ func (c *Capturer) Create(sessionName, name string, opts ...CheckpointOption) (*
 
 // captureSessionState captures the current state of a tmux session.
 func (c *Capturer) captureSessionState(sessionName string) (SessionState, error) {
-	panes, err := tmux.GetPanes(sessionName)
+	panes, err := zellij.GetPanes(sessionName)
 	if err != nil {
 		return SessionState{}, fmt.Errorf("getting panes: %w", err)
 	}
@@ -139,7 +139,7 @@ func (c *Capturer) captureScrollback(cp *Checkpoint, lines int) error {
 
 		// Get pane ID for capture
 		paneID := fmt.Sprintf("%s:%d", cp.SessionName, pane.Index)
-		content, err := tmux.CapturePaneOutput(paneID, lines)
+		content, err := zellij.CapturePaneOutput(paneID, lines)
 		if err != nil {
 			continue // Skip panes that fail
 		}

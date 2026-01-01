@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/bv"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 const (
@@ -157,7 +157,7 @@ func (rm *RecoveryManager) SendRecoveryPromptByID(session string, paneIndex int,
 		promptToSend := BuildContextAwarePrompt(rm.prompt, rm.includeBeadContext)
 
 		// Send the recovery prompt
-		if err := tmux.SendKeys(target, promptToSend, true); err != nil {
+		if err := zellij.SendKeys(target, promptToSend, true); err != nil {
 			// Log error if possible, or just fail silently
 			// Since we can't return the error, we rely on the next check to retry (after cooldown)
 			return

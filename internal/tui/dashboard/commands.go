@@ -11,7 +11,7 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/bv"
 	"github.com/Dicklesworthstone/ntm/internal/cass"
 	"github.com/Dicklesworthstone/ntm/internal/history"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 	"github.com/Dicklesworthstone/ntm/internal/tokens"
 	"github.com/Dicklesworthstone/ntm/internal/tracker"
 	"github.com/Dicklesworthstone/ntm/internal/tui/dashboard/panels"
@@ -68,12 +68,12 @@ func (m Model) fetchMetricsCmd() tea.Cmd {
 
 		for _, p := range panes {
 			// Skip user panes
-			if p.Type == tmux.AgentUser {
+			if p.Type == zellij.AgentUser {
 				continue
 			}
 
 			// Capture more context for better estimate
-			out, err := tmux.CapturePaneOutput(p.ID, 2000)
+			out, err := zellij.CapturePaneOutput(p.ID, 2000)
 			if err != nil {
 				continue
 			}

@@ -394,16 +394,16 @@ func TestSessionExistsError(t *testing.T) {
 	}
 }
 
-func TestTmuxNotInstalledError(t *testing.T) {
-	err := TmuxNotInstalledError()
+func TestZellijNotInstalledError(t *testing.T) {
+	err := ZellijNotInstalledError()
 
-	if !strings.Contains(err.Message, "tmux") {
-		t.Errorf("Message should mention tmux: %q", err.Message)
+	if !strings.Contains(err.Message, "zellij") {
+		t.Errorf("Message should mention zellij: %q", err.Message)
 	}
-	if err.Code != "TMUX_NOT_INSTALLED" {
+	if err.Code != "ZELLIJ_NOT_INSTALLED" {
 		t.Errorf("Code = %q", err.Code)
 	}
-	if !strings.Contains(err.Hint, "brew") && !strings.Contains(err.Hint, "apt") {
+	if !strings.Contains(err.Hint, "brew") && !strings.Contains(err.Hint, "cargo") {
 		t.Errorf("Hint should include install instructions: %q", err.Hint)
 	}
 }

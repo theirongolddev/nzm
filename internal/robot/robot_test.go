@@ -12,7 +12,7 @@ import (
 
 	"github.com/Dicklesworthstone/ntm/internal/bv"
 	"github.com/Dicklesworthstone/ntm/internal/config"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // Helper to capture stdout
@@ -491,16 +491,16 @@ func TestPrintSessions(t *testing.T) {
 // ====================
 
 func TestPrintStatusWithSession(t *testing.T) {
-	if !tmux.IsInstalled() {
-		t.Skip("tmux not installed")
+	if !zellij.IsInstalled() {
+		t.Skip("zellij not installed")
 	}
 
 	// Create a test session
 	sessionName := "ntm_test_status_" + time.Now().Format("150405")
-	if err := tmux.CreateSession(sessionName, ""); err != nil {
+	if err := zellij.CreateSession(sessionName, ""); err != nil {
 		t.Fatalf("Failed to create test session: %v", err)
 	}
-	defer tmux.KillSession(sessionName)
+	defer zellij.KillSession(sessionName)
 
 	output, err := captureStdout(t, PrintStatus)
 	if err != nil {
@@ -538,8 +538,8 @@ func TestPrintStatusWithSession(t *testing.T) {
 }
 
 func TestPrintTailNonexistentSession(t *testing.T) {
-	if !tmux.IsInstalled() {
-		t.Skip("tmux not installed")
+	if !zellij.IsInstalled() {
+		t.Skip("zellij not installed")
 	}
 
 	err := PrintTail("nonexistent_session_12345", 20, nil)
@@ -552,8 +552,8 @@ func TestPrintTailNonexistentSession(t *testing.T) {
 }
 
 func TestPrintSendNonexistentSession(t *testing.T) {
-	if !tmux.IsInstalled() {
-		t.Skip("tmux not installed")
+	if !zellij.IsInstalled() {
+		t.Skip("zellij not installed")
 	}
 
 	output, err := captureStdout(t, func() error {
@@ -582,16 +582,16 @@ func TestPrintSendNonexistentSession(t *testing.T) {
 }
 
 func TestPrintSendWithSession(t *testing.T) {
-	if !tmux.IsInstalled() {
-		t.Skip("tmux not installed")
+	if !zellij.IsInstalled() {
+		t.Skip("zellij not installed")
 	}
 
 	// Create a test session
 	sessionName := "ntm_test_send_" + time.Now().Format("150405")
-	if err := tmux.CreateSession(sessionName, ""); err != nil {
+	if err := zellij.CreateSession(sessionName, ""); err != nil {
 		t.Fatalf("Failed to create test session: %v", err)
 	}
-	defer tmux.KillSession(sessionName)
+	defer zellij.KillSession(sessionName)
 
 	output, err := captureStdout(t, func() error {
 		return PrintSend(SendOptions{
@@ -626,17 +626,17 @@ func TestPrintSendWithSession(t *testing.T) {
 // ====================
 
 func TestSendOptionsExclude(t *testing.T) {
-	if !tmux.IsInstalled() {
-		t.Skip("tmux not installed")
+	if !zellij.IsInstalled() {
+		t.Skip("zellij not installed")
 	}
 
 	sessionName := "ntm_test_exclude_" + time.Now().Format("150405")
-	if err := tmux.CreateSession(sessionName, ""); err != nil {
+	if err := zellij.CreateSession(sessionName, ""); err != nil {
 		t.Fatalf("Failed to create test session: %v", err)
 	}
-	defer tmux.KillSession(sessionName)
+	defer zellij.KillSession(sessionName)
 
-	panes, err := tmux.GetPanes(sessionName)
+	panes, err := zellij.GetPanes(sessionName)
 	if err != nil || len(panes) == 0 {
 		t.Fatalf("Failed to get panes: %v", err)
 	}
@@ -669,17 +669,17 @@ func TestSendOptionsExclude(t *testing.T) {
 }
 
 func TestSendOptionsPaneFilter(t *testing.T) {
-	if !tmux.IsInstalled() {
-		t.Skip("tmux not installed")
+	if !zellij.IsInstalled() {
+		t.Skip("zellij not installed")
 	}
 
 	sessionName := "ntm_test_panefilter_" + time.Now().Format("150405")
-	if err := tmux.CreateSession(sessionName, ""); err != nil {
+	if err := zellij.CreateSession(sessionName, ""); err != nil {
 		t.Fatalf("Failed to create test session: %v", err)
 	}
-	defer tmux.KillSession(sessionName)
+	defer zellij.KillSession(sessionName)
 
-	panes, err := tmux.GetPanes(sessionName)
+	panes, err := zellij.GetPanes(sessionName)
 	if err != nil || len(panes) == 0 {
 		t.Fatalf("Failed to get panes: %v", err)
 	}
@@ -716,20 +716,20 @@ func TestSendOptionsPaneFilter(t *testing.T) {
 // ====================
 
 func TestPrintTailWithSession(t *testing.T) {
-	if !tmux.IsInstalled() {
-		t.Skip("tmux not installed")
+	if !zellij.IsInstalled() {
+		t.Skip("zellij not installed")
 	}
 
 	sessionName := "ntm_test_tail_" + time.Now().Format("150405")
-	if err := tmux.CreateSession(sessionName, ""); err != nil {
+	if err := zellij.CreateSession(sessionName, ""); err != nil {
 		t.Fatalf("Failed to create test session: %v", err)
 	}
-	defer tmux.KillSession(sessionName)
+	defer zellij.KillSession(sessionName)
 
 	// Send some output to the pane
-	panes, _ := tmux.GetPanes(sessionName)
+	panes, _ := zellij.GetPanes(sessionName)
 	if len(panes) > 0 {
-		tmux.SendKeys(panes[0].ID, "echo hello world", true)
+		zellij.SendKeys(panes[0].ID, "echo hello world", true)
 	}
 
 	// Wait a bit for output
@@ -760,17 +760,17 @@ func TestPrintTailWithSession(t *testing.T) {
 }
 
 func TestPrintTailWithPaneFilter(t *testing.T) {
-	if !tmux.IsInstalled() {
-		t.Skip("tmux not installed")
+	if !zellij.IsInstalled() {
+		t.Skip("zellij not installed")
 	}
 
 	sessionName := "ntm_test_tail_filter_" + time.Now().Format("150405")
-	if err := tmux.CreateSession(sessionName, ""); err != nil {
+	if err := zellij.CreateSession(sessionName, ""); err != nil {
 		t.Fatalf("Failed to create test session: %v", err)
 	}
-	defer tmux.KillSession(sessionName)
+	defer zellij.KillSession(sessionName)
 
-	panes, err := tmux.GetPanes(sessionName)
+	panes, err := zellij.GetPanes(sessionName)
 	if err != nil || len(panes) == 0 {
 		t.Fatalf("Failed to get panes: %v", err)
 	}
@@ -830,15 +830,15 @@ func TestPrintSnapshot(t *testing.T) {
 }
 
 func TestPrintSnapshotWithSession(t *testing.T) {
-	if !tmux.IsInstalled() {
-		t.Skip("tmux not installed")
+	if !zellij.IsInstalled() {
+		t.Skip("zellij not installed")
 	}
 
 	sessionName := "ntm_test_snapshot_" + time.Now().Format("150405")
-	if err := tmux.CreateSession(sessionName, ""); err != nil {
+	if err := zellij.CreateSession(sessionName, ""); err != nil {
 		t.Fatalf("Failed to create test session: %v", err)
 	}
-	defer tmux.KillSession(sessionName)
+	defer zellij.KillSession(sessionName)
 
 	output, err := captureStdout(t, func() error { return PrintSnapshot(config.Default()) })
 	if err != nil {
@@ -877,14 +877,14 @@ func TestPrintSnapshotWithSession(t *testing.T) {
 
 func TestAgentTypeString(t *testing.T) {
 	tests := []struct {
-		input    tmux.AgentType
+		input    zellij.AgentType
 		expected string
 	}{
-		{tmux.AgentClaude, "claude"},
-		{tmux.AgentCodex, "codex"},
-		{tmux.AgentGemini, "gemini"},
-		{tmux.AgentUser, "user"},
-		{tmux.AgentType("other"), "unknown"},
+		{zellij.AgentClaude, "claude"},
+		{zellij.AgentCodex, "codex"},
+		{zellij.AgentGemini, "gemini"},
+		{zellij.AgentUser, "user"},
+		{zellij.AgentType("other"), "unknown"},
 	}
 
 	for _, tc := range tests {
@@ -1074,15 +1074,15 @@ func TestSnapshotOutputStructure(t *testing.T) {
 // ====================
 
 func TestSendOptionsDelay(t *testing.T) {
-	if !tmux.IsInstalled() {
-		t.Skip("tmux not installed")
+	if !zellij.IsInstalled() {
+		t.Skip("zellij not installed")
 	}
 
 	sessionName := "ntm_test_delay_" + time.Now().Format("150405")
-	if err := tmux.CreateSession(sessionName, ""); err != nil {
+	if err := zellij.CreateSession(sessionName, ""); err != nil {
 		t.Fatalf("Failed to create test session: %v", err)
 	}
-	defer tmux.KillSession(sessionName)
+	defer zellij.KillSession(sessionName)
 
 	start := time.Now()
 	_, err := captureStdout(t, func() error {

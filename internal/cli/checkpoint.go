@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Dicklesworthstone/ntm/internal/checkpoint"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
 )
 
@@ -70,7 +70,7 @@ Examples:
 			session := args[0]
 
 			// Verify session exists
-			if !tmux.SessionExists(session) {
+			if !zellij.SessionExists(session) {
 				return fmt.Errorf("session %q does not exist", session)
 			}
 

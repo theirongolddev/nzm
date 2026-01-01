@@ -17,7 +17,7 @@ import (
 
 	"github.com/Dicklesworthstone/ntm/internal/agentmail"
 	"github.com/Dicklesworthstone/ntm/internal/status"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 func newMailCmd() *cobra.Command {
@@ -226,7 +226,7 @@ func runMailInbox(cmd *cobra.Command, client mailInboxClient, session string, se
 			}
 			session = res.Session
 		}
-		panes, err := tmux.GetPanes(session)
+		panes, err := zellij.GetPanes(session)
 		if err != nil {
 			return fmt.Errorf("getting session panes: %w", err)
 		}
@@ -512,8 +512,8 @@ func runMailSendOverseer(cmd *cobra.Command, session string, to []string, subjec
 	// Session check is optional - we primarily care about the project
 	// But it's useful to verify the user is in the right context
 	if session != "" {
-		if err := tmux.EnsureInstalled(); err == nil {
-			if !tmux.SessionExists(session) {
+		if err := zellij.EnsureInstalled(); err == nil {
+			if !zellij.SessionExists(session) {
 				fmt.Fprintf(os.Stderr, "Warning: tmux session '%s' not found (continuing anyway)\n", session)
 			}
 		}
@@ -617,7 +617,7 @@ func runMailSendOverseer(cmd *cobra.Command, session string, to []string, subjec
 }
 
 // resolveAgentName tries to get the agent name from a pane.
-func resolveAgentName(p tmux.Pane) string {
+func resolveAgentName(p zellij.Pane) string {
 	// Try pane title first (may contain agent name)
 	if p.Title != "" && !strings.HasPrefix(p.Title, "pane") {
 		if looksLikeAgentName(p.Title) {
@@ -628,11 +628,11 @@ func resolveAgentName(p tmux.Pane) string {
 	// Fall back to generated name based on type and index
 	var prefix string
 	switch p.Type {
-	case tmux.AgentClaude:
+	case zellij.AgentClaude:
 		prefix = "Claude"
-	case tmux.AgentCodex:
+	case zellij.AgentCodex:
 		prefix = "Codex"
-	case tmux.AgentGemini:
+	case zellij.AgentGemini:
 		prefix = "Gemini"
 	default:
 		return ""

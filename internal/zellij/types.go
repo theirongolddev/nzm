@@ -2,7 +2,9 @@ package zellij
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
+	"time"
 )
 
 // paneNameWithMetaRegex matches the NZM pane naming convention with variants and tags:
@@ -26,17 +28,17 @@ const (
 
 // Pane represents a Zellij pane with NZM metadata
 type Pane struct {
-	ID        uint32
-	Index     int
-	Title     string
-	Type      AgentType
-	Variant   string   // Model alias or persona name
-	Tags      []string // User-defined tags
-	Command   string   // Not available in Zellij - kept for compatibility
-	Width     int      // Not available in Zellij - kept for compatibility
-	Height    int      // Not available in Zellij - kept for compatibility
-	Active    bool     // Mapped from IsFocused
-	IsPlugin  bool     // Whether this is a plugin pane
+	ID         string    // String ID for API compatibility (internally uint32)
+	Index      int
+	Title      string
+	Type       AgentType
+	Variant    string   // Model alias or persona name
+	Tags       []string // User-defined tags
+	Command    string   // Not available in Zellij - kept for compatibility
+	Width      int      // Not available in Zellij - kept for compatibility
+	Height     int      // Not available in Zellij - kept for compatibility
+	Active     bool     // Mapped from IsFocused
+	IsPlugin   bool     // Whether this is a plugin pane
 	IsFloating bool
 }
 
@@ -88,11 +90,23 @@ func FormatTags(tags []string) string {
 	return "[" + strings.Join(tags, ",") + "]"
 }
 
+// stripTags removes the [tags] suffix from a pane title.
+func stripTags(title string) string {
+	idx := strings.LastIndex(title, "[")
+	if idx == -1 {
+		return title
+	}
+	if strings.HasSuffix(title, "]") && idx < len(title)-1 {
+		return title[:idx]
+	}
+	return title
+}
+
 // ConvertPaneInfo converts a PaneInfo from the plugin to a full Pane struct
 func ConvertPaneInfo(info PaneInfo) Pane {
 	agentType, variant, tags := parseAgentFromTitle(info.Title)
 	return Pane{
-		ID:         info.ID,
+		ID:         strconv.FormatUint(uint64(info.ID), 10),
 		Index:      int(info.ID), // Use ID as index for Zellij
 		Title:      info.Title,
 		Type:       agentType,
@@ -105,6 +119,7 @@ func ConvertPaneInfo(info PaneInfo) Pane {
 
 // PaneActivity contains pane info with activity tracking
 type PaneActivity struct {
-	Pane      Pane
-	IsActive  bool // Whether pane is currently focused/active
+	Pane         Pane
+	LastActivity time.Time
+	IsActive     bool // Whether pane is currently focused/active
 }

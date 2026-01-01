@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/Dicklesworthstone/ntm/internal/config"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // resetFlags resets global flags to default values between tests
@@ -102,8 +102,8 @@ func TestDepsCmdExecutes(t *testing.T) {
 
 // TestListCmdExecutes tests list command executes
 func TestListCmdExecutes(t *testing.T) {
-	if !tmux.IsInstalled() {
-		t.Skip("tmux not installed")
+	if !zellij.IsInstalled() {
+		t.Skip("zellij not installed")
 	}
 
 	resetFlags()
@@ -117,8 +117,8 @@ func TestListCmdExecutes(t *testing.T) {
 
 // TestListCmdJSONExecutes tests list command with JSON output executes
 func TestListCmdJSONExecutes(t *testing.T) {
-	if !tmux.IsInstalled() {
-		t.Skip("tmux not installed")
+	if !zellij.IsInstalled() {
+		t.Skip("zellij not installed")
 	}
 
 	resetFlags()
@@ -132,8 +132,8 @@ func TestListCmdJSONExecutes(t *testing.T) {
 
 // TestSpawnValidation tests spawn command argument validation
 func TestSpawnValidation(t *testing.T) {
-	if !tmux.IsInstalled() {
-		t.Skip("tmux not installed")
+	if !zellij.IsInstalled() {
+		t.Skip("zellij not installed")
 	}
 
 	// Initialize config for spawn command
@@ -259,8 +259,8 @@ func TestRobotHelpExecutes(t *testing.T) {
 
 // TestRobotStatusExecutes tests the robot-status flag executes
 func TestRobotStatusExecutes(t *testing.T) {
-	if !tmux.IsInstalled() {
-		t.Skip("tmux not installed")
+	if !zellij.IsInstalled() {
+		t.Skip("zellij not installed")
 	}
 
 	resetFlags()
@@ -274,8 +274,8 @@ func TestRobotStatusExecutes(t *testing.T) {
 
 // TestRobotSnapshotExecutes tests the robot-snapshot flag executes
 func TestRobotSnapshotExecutes(t *testing.T) {
-	if !tmux.IsInstalled() {
-		t.Skip("tmux not installed")
+	if !zellij.IsInstalled() {
+		t.Skip("zellij not installed")
 	}
 
 	resetFlags()
@@ -289,8 +289,8 @@ func TestRobotSnapshotExecutes(t *testing.T) {
 
 // TestRobotPlanExecutes tests the robot-plan flag executes
 func TestRobotPlanExecutes(t *testing.T) {
-	if !tmux.IsInstalled() {
-		t.Skip("tmux not installed")
+	if !zellij.IsInstalled() {
+		t.Skip("zellij not installed")
 	}
 
 	resetFlags()
@@ -304,8 +304,8 @@ func TestRobotPlanExecutes(t *testing.T) {
 
 // TestAttachCmdNoArgs tests attach command without arguments
 func TestAttachCmdNoArgs(t *testing.T) {
-	if !tmux.IsInstalled() {
-		t.Skip("tmux not installed")
+	if !zellij.IsInstalled() {
+		t.Skip("zellij not installed")
 	}
 
 	// Initialize config
@@ -414,8 +414,8 @@ func TestKillCmdRequiresSession(t *testing.T) {
 
 // TestViewCmdRequiresSession tests view command requires session name
 func TestViewCmdRequiresSession(t *testing.T) {
-	if !tmux.IsInstalled() {
-		t.Skip("tmux not installed")
+	if !zellij.IsInstalled() {
+		t.Skip("zellij not installed")
 	}
 
 	resetFlags()
@@ -528,8 +528,8 @@ func TestBindCmdHelp(t *testing.T) {
 
 // TestCommandAliases tests command aliases work
 func TestCommandAliases(t *testing.T) {
-	if !tmux.IsInstalled() {
-		t.Skip("tmux not installed")
+	if !zellij.IsInstalled() {
+		t.Skip("zellij not installed")
 	}
 
 	aliases := []struct {
@@ -615,8 +615,8 @@ func TestConfigInitCreatesFile(t *testing.T) {
 
 // TestStatusCmdNonExistentSession tests status with non-existent session
 func TestStatusCmdNonExistentSession(t *testing.T) {
-	if !tmux.IsInstalled() {
-		t.Skip("tmux not installed")
+	if !zellij.IsInstalled() {
+		t.Skip("zellij not installed")
 	}
 
 	cfg = config.Default()
@@ -645,8 +645,8 @@ func TestRobotSendRequiresMsg(t *testing.T) {
 
 // TestRobotSnapshotWithSince tests robot-snapshot with --since flag
 func TestRobotSnapshotWithSince(t *testing.T) {
-	if !tmux.IsInstalled() {
-		t.Skip("tmux not installed")
+	if !zellij.IsInstalled() {
+		t.Skip("zellij not installed")
 	}
 
 	resetFlags()
@@ -670,8 +670,8 @@ func TestRobotSnapshotInvalidSince(t *testing.T) {
 
 // TestRobotTailExecutes tests robot-tail flag executes
 func TestRobotTailExecutes(t *testing.T) {
-	if !tmux.IsInstalled() {
-		t.Skip("tmux not installed")
+	if !zellij.IsInstalled() {
+		t.Skip("zellij not installed")
 	}
 
 	resetFlags()
@@ -683,8 +683,8 @@ func TestRobotTailExecutes(t *testing.T) {
 
 // TestRobotTailWithLines tests robot-tail with --lines flag
 func TestRobotTailWithLines(t *testing.T) {
-	if !tmux.IsInstalled() {
-		t.Skip("tmux not installed")
+	if !zellij.IsInstalled() {
+		t.Skip("zellij not installed")
 	}
 
 	resetFlags()
@@ -696,8 +696,8 @@ func TestRobotTailWithLines(t *testing.T) {
 
 // TestGlobalJSONFlag tests the global --json flag works
 func TestGlobalJSONFlag(t *testing.T) {
-	if !tmux.IsInstalled() {
-		t.Skip("tmux not installed")
+	if !zellij.IsInstalled() {
+		t.Skip("zellij not installed")
 	}
 
 	resetFlags()

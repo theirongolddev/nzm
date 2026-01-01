@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/bv"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // AssignOptions configures work assignment analysis
@@ -111,7 +111,7 @@ func PrintAssign(opts AssignOptions) error {
 		)
 	}
 
-	if !tmux.SessionExists(opts.Session) {
+	if !zellij.SessionExists(opts.Session) {
 		return RobotError(
 			fmt.Errorf("session '%s' not found", opts.Session),
 			ErrCodeSessionNotFound,
@@ -134,7 +134,7 @@ func PrintAssign(opts AssignOptions) error {
 	}
 
 	// Get agents from tmux panes
-	panes, err := tmux.GetPanes(opts.Session)
+	panes, err := zellij.GetPanes(opts.Session)
 	if err != nil {
 		return RobotError(
 			fmt.Errorf("failed to get panes: %w", err),
@@ -156,7 +156,7 @@ func PrintAssign(opts AssignOptions) error {
 		model := detectModel(agentType, pane.Title)
 
 		// Capture state (simplified - just check last few lines)
-		scrollback, _ := tmux.CapturePaneOutput(pane.ID, 10)
+		scrollback, _ := zellij.CapturePaneOutput(pane.ID, 10)
 		cleanText := stripANSI(scrollback)
 		lines := splitLines(cleanText)
 		state := detectState(lines, pane.Title)

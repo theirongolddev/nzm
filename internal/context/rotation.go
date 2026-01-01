@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/config"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // RotationMethod identifies how the rotation was triggered.
@@ -73,7 +73,7 @@ type PaneSpawner interface {
 	// SendKeys sends text to a pane.
 	SendKeys(paneID, text string, enter bool) error
 	// GetPanes returns all panes in a session.
-	GetPanes(session string) ([]tmux.Pane, error)
+	GetPanes(session string) ([]zellij.Pane, error)
 }
 
 // DefaultPaneSpawner implements PaneSpawner using the tmux package.
@@ -89,49 +89,49 @@ func NewDefaultPaneSpawner(cfg *config.Config) *DefaultPaneSpawner {
 // SpawnAgent creates a new agent pane.
 func (s *DefaultPaneSpawner) SpawnAgent(session, agentType string, index int, workDir string) (string, error) {
 	// Create a new pane
-	paneID, err := tmux.SplitWindow(session, workDir)
+	paneID, err := zellij.SplitWindow(session, workDir)
 	if err != nil {
 		return "", fmt.Errorf("creating pane: %w", err)
 	}
 
 	// Set the pane title
 	shortType := agentTypeShort(agentType)
-	title := tmux.FormatPaneName(session, shortType, index, "")
-	if err := tmux.SetPaneTitle(paneID, title); err != nil {
+	title := zellij.FormatPaneName(session, shortType, index, "")
+	if err := zellij.SetPaneTitle(paneID, title); err != nil {
 		return paneID, fmt.Errorf("setting pane title: %w", err)
 	}
 
 	// Get the agent command
 	agentCmd := s.getAgentCommand(agentType)
-	cmd, err := tmux.BuildPaneCommand(workDir, agentCmd)
+	cmd, err := zellij.BuildPaneCommand(workDir, agentCmd)
 	if err != nil {
 		return paneID, fmt.Errorf("building command: %w", err)
 	}
 
 	// Launch the agent
-	if err := tmux.SendKeys(paneID, cmd, true); err != nil {
+	if err := zellij.SendKeys(paneID, cmd, true); err != nil {
 		return paneID, fmt.Errorf("launching agent: %w", err)
 	}
 
 	// Apply tiled layout
-	_ = tmux.ApplyTiledLayout(session)
+	_ = zellij.ApplyTiledLayout(session)
 
 	return paneID, nil
 }
 
 // KillPane terminates a pane.
 func (s *DefaultPaneSpawner) KillPane(paneID string) error {
-	return tmux.KillPane(paneID)
+	return zellij.KillPane(paneID)
 }
 
 // SendKeys sends text to a pane.
 func (s *DefaultPaneSpawner) SendKeys(paneID, text string, enter bool) error {
-	return tmux.SendKeys(paneID, text, enter)
+	return zellij.SendKeys(paneID, text, enter)
 }
 
 // GetPanes returns all panes in a session.
-func (s *DefaultPaneSpawner) GetPanes(session string) ([]tmux.Pane, error) {
-	return tmux.GetPanes(session)
+func (s *DefaultPaneSpawner) GetPanes(session string) ([]zellij.Pane, error) {
+	return zellij.GetPanes(session)
 }
 
 func (s *DefaultPaneSpawner) getAgentCommand(agentType string) string {
@@ -292,7 +292,7 @@ func (r *Rotator) rotateAgent(session, agentID, workDir string) RotationResult {
 		return result
 	}
 
-	var oldPane *tmux.Pane
+	var oldPane *zellij.Pane
 	for i := range panes {
 		// Use exact match only to avoid matching cc_1 against cc_10
 		if panes[i].Title == agentID {
@@ -343,7 +343,7 @@ func (r *Rotator) rotateAgent(session, agentID, workDir string) RotationResult {
 	time.Sleep(5 * time.Second) // Give agent time to start responding
 
 	// Capture the summary response
-	summaryText, err := tmux.CapturePaneOutput(oldPane.ID, 100)
+	summaryText, err := zellij.CapturePaneOutput(oldPane.ID, 100)
 	if err != nil {
 		// Proceed with fallback summary
 		summaryText = ""
@@ -360,7 +360,7 @@ func (r *Rotator) rotateAgent(session, agentID, workDir string) RotationResult {
 		)
 	} else {
 		// Generate fallback summary from recent output
-		recentOutput, _ := tmux.CapturePaneOutput(oldPane.ID, 50)
+		recentOutput, _ := zellij.CapturePaneOutput(oldPane.ID, 50)
 		handoffSummary = r.summary.GenerateFallbackSummary(
 			agentID,
 			agentTypeLong(string(oldPane.Type)),
@@ -382,7 +382,7 @@ func (r *Rotator) rotateAgent(session, agentID, workDir string) RotationResult {
 		return result
 	}
 	result.NewPaneID = newPaneID
-	result.NewAgentID = tmux.FormatPaneName(session, agentTypeShort(agentType), newIndex, "")
+	result.NewAgentID = zellij.FormatPaneName(session, agentTypeShort(agentType), newIndex, "")
 
 	// Wait for new agent to be ready
 	time.Sleep(3 * time.Second)
@@ -452,7 +452,7 @@ func (r *Rotator) tryCompaction(agentID, paneID string) *CompactionResult {
 	// Try the first compaction command (builtin if available)
 	cmd := cmds[0]
 	// Both slash commands and prompts need enter=true to be submitted
-	if err := tmux.SendKeys(paneID, cmd.Command, true); err != nil {
+	if err := zellij.SendKeys(paneID, cmd.Command, true); err != nil {
 		return &CompactionResult{Success: false, Error: fmt.Sprintf("failed to send compaction command: %v", err)}
 	}
 

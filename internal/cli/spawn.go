@@ -23,7 +23,7 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/plugins"
 	"github.com/Dicklesworthstone/ntm/internal/recipe"
 	"github.com/Dicklesworthstone/ntm/internal/resilience"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // optionalDurationValue implements pflag.Value for a duration flag with optional value.
@@ -147,7 +147,7 @@ func newSpawnCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "spawn <session-name>",
 		Short: "Create session and spawn AI agents in panes",
-		Long: `Create a new tmux session and launch AI coding agents in separate panes.
+		Long: `Create a new Zellij session and launch AI coding agents in separate panes.
 
 By default, the first pane is reserved for the user. Agent panes are created
 and titled with their type (e.g., myproject__cc_1, myproject__cod_1).
@@ -410,11 +410,11 @@ func spawnSessionLogic(opts SpawnOptions) error {
 		return err
 	}
 
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := zellij.EnsureInstalled(); err != nil {
 		return outputError(err)
 	}
 
-	if err := tmux.ValidateSessionName(opts.Session); err != nil {
+	if err := zellij.ValidateSessionName(opts.Session); err != nil {
 		return outputError(err)
 	}
 
@@ -511,11 +511,11 @@ func spawnSessionLogic(opts SpawnOptions) error {
 
 	// Create or use existing session
 	steps := output.NewSteps()
-	if !tmux.SessionExists(opts.Session) {
+	if !zellij.SessionExists(opts.Session) {
 		if !IsJSONOutput() {
 			steps.Start(fmt.Sprintf("Creating session '%s'", opts.Session))
 		}
-		if err := tmux.CreateSession(opts.Session, dir); err != nil {
+		if err := zellij.CreateSession(opts.Session, dir); err != nil {
 			if !IsJSONOutput() {
 				steps.Fail()
 			}
@@ -527,7 +527,7 @@ func spawnSessionLogic(opts SpawnOptions) error {
 	}
 
 	// Get current pane count
-	panes, err := tmux.GetPanes(opts.Session)
+	panes, err := zellij.GetPanes(opts.Session)
 	if err != nil {
 		return outputError(err)
 	}
@@ -540,7 +540,7 @@ func spawnSessionLogic(opts SpawnOptions) error {
 			steps.Start(fmt.Sprintf("Creating %d pane(s)", toAdd))
 		}
 		for i := 0; i < toAdd; i++ {
-			if _, err := tmux.SplitWindow(opts.Session, dir); err != nil {
+			if _, err := zellij.SplitWindow(opts.Session, dir); err != nil {
 				if !IsJSONOutput() {
 					steps.Fail()
 				}
@@ -553,7 +553,7 @@ func spawnSessionLogic(opts SpawnOptions) error {
 	}
 
 	// Get updated pane list
-	panes, err = tmux.GetPanes(opts.Session)
+	panes, err = zellij.GetPanes(opts.Session)
 	if err != nil {
 		return outputError(err)
 	}
@@ -618,8 +618,8 @@ func spawnSessionLogic(opts SpawnOptions) error {
 
 		// Format pane title with optional model variant
 		// Format: {session}__{type}_{index} or {session}__{type}_{index}_{variant}
-		title := tmux.FormatPaneName(opts.Session, string(agent.Type), agent.Index, agent.Model)
-		if err := tmux.SetPaneTitle(pane.ID, title); err != nil {
+		title := zellij.FormatPaneName(opts.Session, string(agent.Type), agent.Index, agent.Model)
+		if err := zellij.SetPaneTitle(pane.ID, title); err != nil {
 			return outputError(fmt.Errorf("setting pane title: %w", err))
 		}
 
@@ -690,8 +690,8 @@ func spawnSessionLogic(opts SpawnOptions) error {
 
 		// Update pane title with profile name if assigned
 		if personaName != "" {
-			title := tmux.FormatPaneName(opts.Session, string(agent.Type), agent.Index, personaName)
-			if err := tmux.SetPaneTitle(pane.ID, title); err != nil {
+			title := zellij.FormatPaneName(opts.Session, string(agent.Type), agent.Index, personaName)
+			if err := zellij.SetPaneTitle(pane.ID, title); err != nil {
 				if !IsJSONOutput() {
 					fmt.Printf("⚠ Warning: could not update pane title with profile name: %v\n", err)
 				}
@@ -722,17 +722,17 @@ func spawnSessionLogic(opts SpawnOptions) error {
 			agentCmd = envPrefix + agentCmd
 		}
 
-		safeAgentCmd, err := tmux.SanitizePaneCommand(agentCmd)
+		safeAgentCmd, err := zellij.SanitizePaneCommand(agentCmd)
 		if err != nil {
 			return outputError(fmt.Errorf("invalid %s agent command: %w", agent.Type, err))
 		}
 
-		cmd, err := tmux.BuildPaneCommand(dir, safeAgentCmd)
+		cmd, err := zellij.BuildPaneCommand(dir, safeAgentCmd)
 		if err != nil {
 			return outputError(fmt.Errorf("building %s agent command: %w", agent.Type, err))
 		}
 
-		if err := tmux.SendKeys(pane.ID, cmd, true); err != nil {
+		if err := zellij.SendKeys(pane.ID, cmd, true); err != nil {
 			return outputError(fmt.Errorf("launching %s agent: %w", agent.Type, err))
 		}
 
@@ -764,7 +764,7 @@ func spawnSessionLogic(opts SpawnOptions) error {
 		if cassContext != "" {
 			// Wait a bit for agent to start
 			time.Sleep(500 * time.Millisecond)
-			if err := tmux.SendKeys(pane.ID, cassContext, true); err != nil {
+			if err := zellij.SendKeys(pane.ID, cassContext, true); err != nil {
 				if !IsJSONOutput() {
 					fmt.Printf("⚠ Warning: failed to inject context: %v\n", err)
 				}
@@ -789,7 +789,7 @@ func spawnSessionLogic(opts SpawnOptions) error {
 				go func() {
 					defer staggerWg.Done()
 					time.Sleep(delay)
-					if err := tmux.SendKeys(paneID, prompt, true); err != nil {
+					if err := zellij.SendKeys(paneID, prompt, true); err != nil {
 						// Log error but don't fail - agent is already running
 						if !IsJSONOutput() {
 							fmt.Printf("⚠ Warning: staggered prompt delivery failed for pane %s: %v\n", paneID, err)
@@ -806,7 +806,7 @@ func spawnSessionLogic(opts SpawnOptions) error {
 			} else {
 				// Immediate delivery for first agent
 				time.Sleep(200 * time.Millisecond)
-				if err := tmux.SendKeys(pane.ID, opts.Prompt, true); err != nil {
+				if err := zellij.SendKeys(pane.ID, opts.Prompt, true); err != nil {
 					if !IsJSONOutput() {
 						fmt.Printf("⚠ Warning: failed to send prompt: %v\n", err)
 					}
@@ -847,7 +847,7 @@ func spawnSessionLogic(opts SpawnOptions) error {
 	}
 
 	// Get final pane list for output
-	finalPanes, _ := tmux.GetPanes(opts.Session)
+	finalPanes, _ := zellij.GetPanes(opts.Session)
 
 	// JSON output mode
 	if IsJSONOutput() {
@@ -872,11 +872,11 @@ func spawnSessionLogic(opts SpawnOptions) error {
 				PromptDelayMs: paneDelays[p.Index].Milliseconds(),
 			}
 			switch p.Type {
-			case tmux.AgentClaude:
+			case zellij.AgentClaude:
 				agentCounts.Claude++
-			case tmux.AgentCodex:
+			case zellij.AgentCodex:
 				agentCounts.Codex++
-			case tmux.AgentGemini:
+			case zellij.AgentGemini:
 				agentCounts.Gemini++
 			default:
 				// Other/plugin agents

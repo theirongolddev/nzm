@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 	"github.com/Dicklesworthstone/ntm/internal/tui/layout"
 )
 
@@ -114,18 +114,18 @@ func newBenchModel(width, height, panes int) Model {
 	m.height = height
 	m.tier = layout.TierForWidth(width)
 
-	m.panes = make([]tmux.Pane, panes)
+	m.panes = make([]zellij.Pane, panes)
 	for i := 0; i < panes; i++ {
-		agentType := tmux.AgentCodex
+		agentType := zellij.AgentCodex
 		switch i % 3 {
 		case 0:
-			agentType = tmux.AgentClaude
+			agentType = zellij.AgentClaude
 		case 1:
-			agentType = tmux.AgentCodex
+			agentType = zellij.AgentCodex
 		case 2:
-			agentType = tmux.AgentGemini
+			agentType = zellij.AgentGemini
 		}
-		m.panes[i] = tmux.Pane{
+		m.panes[i] = zellij.Pane{
 			ID:      fmt.Sprintf("%%%d", i),
 			Index:   i,
 			Title:   fmt.Sprintf("bench_pane_%04d", i),

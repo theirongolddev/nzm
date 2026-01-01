@@ -13,7 +13,7 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/cass"
 	"github.com/Dicklesworthstone/ntm/internal/history"
 	"github.com/Dicklesworthstone/ntm/internal/status"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 	"github.com/Dicklesworthstone/ntm/internal/tracker"
 	"github.com/Dicklesworthstone/ntm/internal/tui/dashboard/panels"
 	"github.com/Dicklesworthstone/ntm/internal/tui/layout"
@@ -24,12 +24,12 @@ func newTestModel(width int) Model {
 	m.width = width
 	m.height = 30
 	m.tier = layout.TierForWidth(width)
-	m.panes = []tmux.Pane{
+	m.panes = []zellij.Pane{
 		{
 			ID:      "1",
 			Index:   1,
 			Title:   "codex-long-title-for-wrap-check",
-			Type:    tmux.AgentCodex,
+			Type:    zellij.AgentCodex,
 			Variant: "VARIANT",
 			Command: "run --flag",
 		},
@@ -367,7 +367,7 @@ func TestPaneGridRendersEnhancedBadges(t *testing.T) {
 	m.animTick = 1
 
 	// Configure pane to look like a Claude agent with a model alias.
-	m.panes[0].Type = tmux.AgentClaude
+	m.panes[0].Type = zellij.AgentClaude
 	m.panes[0].Variant = "opus"
 	m.panes[0].Title = "test__cc_1_opus"
 
@@ -887,7 +887,7 @@ func TestComputeContextRanks(t *testing.T) {
 
 	m := newTestModel(200)
 	// Populate panes matching the status map
-	m.panes = []tmux.Pane{
+	m.panes = []zellij.Pane{
 		{Index: 1, ID: "1"},
 		{Index: 2, ID: "2"},
 		{Index: 3, ID: "3"},
@@ -978,10 +978,10 @@ func TestAgentBorderColor(t *testing.T) {
 	m := newTestModel(120)
 
 	types := []string{
-		string(tmux.AgentClaude),
-		string(tmux.AgentCodex),
-		string(tmux.AgentGemini),
-		string(tmux.AgentUser),
+		string(zellij.AgentClaude),
+		string(zellij.AgentCodex),
+		string(zellij.AgentGemini),
+		string(zellij.AgentUser),
 		"unknown",
 	}
 
@@ -1025,10 +1025,10 @@ func TestAgentBorderStyle(t *testing.T) {
 	m := newTestModel(120)
 
 	types := []string{
-		string(tmux.AgentClaude),
-		string(tmux.AgentCodex),
-		string(tmux.AgentGemini),
-		string(tmux.AgentUser),
+		string(zellij.AgentClaude),
+		string(zellij.AgentCodex),
+		string(zellij.AgentGemini),
+		string(zellij.AgentUser),
 	}
 
 	for _, agentType := range types {
@@ -1054,10 +1054,10 @@ func TestAgentPanelStyles(t *testing.T) {
 	m := newTestModel(120)
 
 	types := []string{
-		string(tmux.AgentClaude),
-		string(tmux.AgentCodex),
-		string(tmux.AgentGemini),
-		string(tmux.AgentUser),
+		string(zellij.AgentClaude),
+		string(zellij.AgentCodex),
+		string(zellij.AgentGemini),
+		string(zellij.AgentUser),
 	}
 
 	for _, agentType := range types {

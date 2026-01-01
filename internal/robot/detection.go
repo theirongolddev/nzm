@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/Dicklesworthstone/ntm/internal/status"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // DetectionMethod describes how an agent type was detected
@@ -96,7 +96,7 @@ var contentPatterns = []struct {
 
 // DetectAgentTypeEnhanced performs multi-method agent type detection
 // Priority: Process > Content > Title > Unknown
-func DetectAgentTypeEnhanced(pane tmux.Pane, content string) AgentDetection {
+func DetectAgentTypeEnhanced(pane zellij.Pane, content string) AgentDetection {
 	// Try process-based detection first (highest confidence)
 	if detection := detectFromProcess(pane.Command); detection.Type != "unknown" {
 		return detection
@@ -200,7 +200,7 @@ func DetectFromNTMTitle(title string) AgentDetection {
 
 // DetectAllAgents detects agent types for all panes in a session
 func DetectAllAgents(session string) (map[int]AgentDetection, error) {
-	panes, err := tmux.GetPanes(session)
+	panes, err := zellij.GetPanes(session)
 	if err != nil {
 		return nil, err
 	}
@@ -209,7 +209,7 @@ func DetectAllAgents(session string) (map[int]AgentDetection, error) {
 	for _, pane := range panes {
 		// Try to capture some content for detection
 		content := ""
-		if captured, err := tmux.CapturePaneOutput(pane.ID, 50); err == nil {
+		if captured, err := zellij.CapturePaneOutput(pane.ID, 50); err == nil {
 			content = captured
 		}
 

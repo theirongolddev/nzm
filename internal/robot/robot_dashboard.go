@@ -11,7 +11,7 @@ import (
 
 	"github.com/Dicklesworthstone/ntm/internal/alerts"
 	"github.com/Dicklesworthstone/ntm/internal/bv"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 	"github.com/Dicklesworthstone/ntm/internal/tracker"
 )
 
@@ -51,14 +51,14 @@ func PrintDashboard(jsonMode bool) error {
 			Version:   Version,
 			Commit:    Commit,
 			BuildDate: Date,
-			TmuxOK:    tmux.IsInstalled(),
+			TmuxOK:    zellij.IsInstalled(),
 		},
 		Summary: StatusSummary{},
 	}
 
 	// Sessions and agents (best-effort)
-	if tmux.IsInstalled() {
-		sessions, err := tmux.ListSessions()
+	if zellij.IsInstalled() {
+		sessions, err := zellij.ListSessions()
 		if err == nil {
 			for _, sess := range sessions {
 				snapSession := SnapshotSession{
@@ -66,7 +66,7 @@ func PrintDashboard(jsonMode bool) error {
 					Attached: sess.Attached,
 					Agents:   []SnapshotAgent{},
 				}
-				panes, err := tmux.GetPanes(sess.Name)
+				panes, err := zellij.GetPanes(sess.Name)
 				if err == nil {
 					for _, pane := range panes {
 						agentType := agentTypeString(pane.Type)

@@ -5,12 +5,12 @@ import (
 	"testing"
 
 	"github.com/Dicklesworthstone/ntm/internal/config"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 func TestPrintTerse(t *testing.T) {
-	if !tmux.IsInstalled() {
-		t.Skip("tmux not installed")
+	if !zellij.IsInstalled() {
+		t.Skip("zellij not installed")
 	}
 
 	cfg := config.Default()

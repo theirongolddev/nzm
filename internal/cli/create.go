@@ -11,7 +11,7 @@ import (
 
 	"github.com/Dicklesworthstone/ntm/internal/hooks"
 	"github.com/Dicklesworthstone/ntm/internal/output"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 func newCreateCmd() *cobra.Command {
@@ -38,14 +38,14 @@ Example:
 }
 
 func runCreate(session string, panes int) error {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := zellij.EnsureInstalled(); err != nil {
 		if IsJSONOutput() {
 			return output.PrintJSON(output.NewError(err.Error()))
 		}
 		return err
 	}
 
-	if err := tmux.ValidateSessionName(session); err != nil {
+	if err := zellij.ValidateSessionName(session); err != nil {
 		if IsJSONOutput() {
 			return output.PrintJSON(output.NewError(err.Error()))
 		}
@@ -115,10 +115,10 @@ func runCreate(session string, panes int) error {
 	}
 
 	// Check if session already exists
-	if tmux.SessionExists(session) {
+	if zellij.SessionExists(session) {
 		if IsJSONOutput() {
 			// Return info about existing session
-			existingPanes, _ := tmux.GetPanes(session)
+			existingPanes, _ := zellij.GetPanes(session)
 			paneResponses := make([]output.PaneResponse, len(existingPanes))
 			for i, p := range existingPanes {
 				paneResponses[i] = output.PaneResponse{
@@ -143,7 +143,7 @@ func runCreate(session string, panes int) error {
 			})
 		}
 		fmt.Printf("Session '%s' already exists\n", session)
-		return tmux.AttachOrSwitch(session)
+		return zellij.AttachOrSwitch(session)
 	}
 
 	if !IsJSONOutput() {
@@ -151,7 +151,7 @@ func runCreate(session string, panes int) error {
 	}
 
 	// Create the session
-	if err := tmux.CreateSession(session, dir); err != nil {
+	if err := zellij.CreateSession(session, dir); err != nil {
 		if IsJSONOutput() {
 			return output.PrintJSON(output.NewError(fmt.Sprintf("creating session: %v", err)))
 		}
@@ -161,7 +161,7 @@ func runCreate(session string, panes int) error {
 	// Add additional panes
 	if panes > 1 {
 		for i := 1; i < panes; i++ {
-			if _, err := tmux.SplitWindow(session, dir); err != nil {
+			if _, err := zellij.SplitWindow(session, dir); err != nil {
 				if IsJSONOutput() {
 					return output.PrintJSON(output.NewError(fmt.Sprintf("creating pane %d: %v", i+1, err)))
 				}
@@ -180,7 +180,7 @@ func runCreate(session string, panes int) error {
 
 	// JSON output mode: return structured response
 	if IsJSONOutput() {
-		finalPanes, _ := tmux.GetPanes(session)
+		finalPanes, _ := zellij.GetPanes(session)
 		paneResponses := make([]output.PaneResponse, len(finalPanes))
 		for i, p := range finalPanes {
 			paneResponses[i] = output.PaneResponse{
@@ -205,7 +205,7 @@ func runCreate(session string, panes int) error {
 	}
 
 	fmt.Printf("Created session '%s' with %d pane(s)\n", session, panes)
-	return tmux.AttachOrSwitch(session)
+	return zellij.AttachOrSwitch(session)
 }
 
 // confirm prompts the user for y/n confirmation
@@ -217,14 +217,14 @@ func confirm(prompt string) bool {
 	return answer == "y" || answer == "yes"
 }
 
-// agentTypeToString converts a tmux.AgentType to a string for JSON output
-func agentTypeToString(t tmux.AgentType) string {
+// agentTypeToString converts a zellij.AgentType to a string for JSON output
+func agentTypeToString(t zellij.AgentType) string {
 	switch t {
-	case tmux.AgentClaude:
+	case zellij.AgentClaude:
 		return "claude"
-	case tmux.AgentCodex:
+	case zellij.AgentCodex:
 		return "codex"
-	case tmux.AgentGemini:
+	case zellij.AgentGemini:
 		return "gemini"
 	default:
 		return "user"

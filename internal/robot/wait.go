@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // WaitOptions configures the robot wait operation.
@@ -56,7 +56,7 @@ const CompleteIdleThreshold = 5 * time.Second
 // Returns exit code: 0 = success, 1 = timeout, 2 = error, 3 = agent error
 func PrintWait(opts WaitOptions) int {
 	// Validate session exists
-	if !tmux.SessionExists(opts.Session) {
+	if !zellij.SessionExists(opts.Session) {
 		resp := WaitResponse{
 			RobotResponse: NewErrorResponse(
 				fmt.Errorf("session '%s' not found", opts.Session),
@@ -102,7 +102,7 @@ func PrintWait(opts WaitOptions) int {
 		if time.Now().After(deadline) {
 			elapsed := time.Since(startTime)
 			// Collect pending agents
-			panes, _ := tmux.GetPanes(opts.Session)
+			panes, _ := zellij.GetPanes(opts.Session)
 			var pending []string
 			for _, pane := range filterWaitPanes(panes, opts) {
 				pending = append(pending, pane.ID)
@@ -123,7 +123,7 @@ func PrintWait(opts WaitOptions) int {
 		}
 
 		// Get all panes
-		panes, err := tmux.GetPanes(opts.Session)
+		panes, err := zellij.GetPanes(opts.Session)
 		if err != nil {
 			resp := WaitResponse{
 				RobotResponse: NewErrorResponse(
@@ -237,8 +237,8 @@ func isValidWaitCondition(condition string) bool {
 }
 
 // filterWaitPanes filters panes based on wait options.
-func filterWaitPanes(panes []tmux.Pane, opts WaitOptions) []tmux.Pane {
-	var result []tmux.Pane
+func filterWaitPanes(panes []zellij.Pane, opts WaitOptions) []zellij.Pane {
+	var result []zellij.Pane
 
 	// Build pane index set for quick lookup
 	paneIndexSet := make(map[int]bool)

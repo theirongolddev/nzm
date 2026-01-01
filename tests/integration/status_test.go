@@ -9,13 +9,13 @@ import (
 	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/status"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 	"github.com/Dicklesworthstone/ntm/tests/testutil"
 )
 
 func TestMain(m *testing.M) {
 	if _, err := exec.LookPath("tmux"); err != nil {
-		// tmux is required for these integration tests
+		// zellij is required for these integration tests
 		return
 	}
 	os.Exit(m.Run())
@@ -34,7 +34,7 @@ func TestStatusDetectsIdlePrompt(t *testing.T) {
 
 	// Start a clean bash shell to avoid interference from fancy prompts (oh-my-zsh, starship, etc).
 	// We use exec to replace the current shell entirely.
-	if err := tmux.SendKeys(paneID, "exec /bin/bash --norc --noprofile", true); err != nil {
+	if err := zellij.SendKeys(paneID, "exec /bin/bash --norc --noprofile", true); err != nil {
 		t.Fatalf("failed to start clean bash: %v", err)
 	}
 
@@ -46,7 +46,7 @@ func TestStatusDetectsIdlePrompt(t *testing.T) {
 	// Wait for bash to be ready by sending a marker command and polling for its output.
 	// We look for "===READY===" on its own line (the actual output), not just in the
 	// captured text (which would include the typed command).
-	if err := tmux.SendKeys(paneID, "echo ===READY===", true); err != nil {
+	if err := zellij.SendKeys(paneID, "echo ===READY===", true); err != nil {
 		t.Fatalf("failed to send ready marker: %v", err)
 	}
 
@@ -54,7 +54,7 @@ func TestStatusDetectsIdlePrompt(t *testing.T) {
 	bashReady := false
 	for time.Now().Before(deadline) {
 		time.Sleep(200 * time.Millisecond)
-		captured, err := tmux.CapturePaneOutput(paneID, 50)
+		captured, err := zellij.CapturePaneOutput(paneID, 50)
 		if err != nil {
 			continue
 		}
@@ -70,12 +70,12 @@ func TestStatusDetectsIdlePrompt(t *testing.T) {
 		}
 	}
 	if !bashReady {
-		output, _ := tmux.CapturePaneOutput(paneID, 50)
+		output, _ := zellij.CapturePaneOutput(paneID, 50)
 		t.Fatalf("timeout waiting for bash to start; captured=%q", output)
 	}
 
 	// Now set our simple prompt and run the actual test command
-	if err := tmux.SendKeys(paneID, "PS1='$ '; echo IDLE_MARKER", true); err != nil {
+	if err := zellij.SendKeys(paneID, "PS1='$ '; echo IDLE_MARKER", true); err != nil {
 		t.Fatalf("failed to set prompt and run command: %v", err)
 	}
 
@@ -84,7 +84,7 @@ func TestStatusDetectsIdlePrompt(t *testing.T) {
 	deadline = time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		time.Sleep(100 * time.Millisecond)
-		captured, err := tmux.CapturePaneOutput(paneID, 50)
+		captured, err := zellij.CapturePaneOutput(paneID, 50)
 		if err != nil {
 			continue
 		}
@@ -100,7 +100,7 @@ func TestStatusDetectsIdlePrompt(t *testing.T) {
 		}
 	}
 	if output == "" {
-		output, _ = tmux.CapturePaneOutput(paneID, 50)
+		output, _ = zellij.CapturePaneOutput(paneID, 50)
 		t.Fatalf("timeout waiting for marker; captured=%q", output)
 	}
 
@@ -126,7 +126,7 @@ func TestStatusDetectsIdlePrompt(t *testing.T) {
 		t.Fatalf("detect failed: %v", err)
 	}
 	if st.State != status.StateIdle {
-		output, _ = tmux.CapturePaneOutput(paneID, 50)
+		output, _ = zellij.CapturePaneOutput(paneID, 50)
 		t.Fatalf("expected idle, got %s; agentType=%q, output=%q", st.State, st.AgentType, output)
 	}
 }
@@ -139,7 +139,7 @@ func TestStatusDetectsWorkingPane(t *testing.T) {
 
 	// Start a longer-running command and wait for visible output to reduce flakiness.
 	// The detection relies on seeing activity and not detecting an idle prompt.
-	if err := tmux.SendKeys(paneID, "for i in 1 2 3 4 5; do echo working-$i; sleep 0.5; done", true); err != nil {
+	if err := zellij.SendKeys(paneID, "for i in 1 2 3 4 5; do echo working-$i; sleep 0.5; done", true); err != nil {
 		t.Fatalf("failed to start work loop: %v", err)
 	}
 	// Wait for first output to appear
@@ -154,7 +154,7 @@ func TestStatusDetectsWorkingPane(t *testing.T) {
 	}
 	if st.State != status.StateWorking {
 		// Capture output for debugging
-		output, _ := tmux.CapturePaneOutput(paneID, 50)
+		output, _ := zellij.CapturePaneOutput(paneID, 50)
 		t.Fatalf("expected working, got %s; output=%q", st.State, output)
 	}
 }
@@ -165,7 +165,7 @@ func TestStatusDetectsErrors(t *testing.T) {
 
 	_, paneID := createSessionWithTitle(t, logger, "cc_1")
 
-	if err := tmux.SendKeys(paneID, "echo \"HTTP 429 rate limit\"; printf \"$ \"", true); err != nil {
+	if err := zellij.SendKeys(paneID, "echo \"HTTP 429 rate limit\"; printf \"$ \"", true); err != nil {
 		t.Fatalf("failed to write error output: %v", err)
 	}
 	time.Sleep(150 * time.Millisecond)
@@ -196,23 +196,23 @@ func TestStatusDetectsAgentTypes(t *testing.T) {
 
 	session, pane1 := createSessionWithTitle(t, logger, "cc_1")
 
-	pane2, err := tmux.SplitWindow(session, t.TempDir())
+	pane2, err := zellij.SplitWindow(session, t.TempDir())
 	if err != nil {
 		t.Fatalf("failed to split window for cod pane: %v", err)
 	}
-	if err := tmux.SetPaneTitle(pane2, fmt.Sprintf("%s__cod_1", session)); err != nil {
+	if err := zellij.SetPaneTitle(pane2, fmt.Sprintf("%s__cod_1", session)); err != nil {
 		t.Fatalf("failed to set cod pane title: %v", err)
 	}
 
-	pane3, err := tmux.SplitWindow(session, t.TempDir())
+	pane3, err := zellij.SplitWindow(session, t.TempDir())
 	if err != nil {
 		t.Fatalf("failed to split window for gmi pane: %v", err)
 	}
-	if err := tmux.SetPaneTitle(pane3, fmt.Sprintf("%s__gmi_1", session)); err != nil {
+	if err := zellij.SetPaneTitle(pane3, fmt.Sprintf("%s__gmi_1", session)); err != nil {
 		t.Fatalf("failed to set gmi pane title: %v", err)
 	}
 
-	_ = tmux.ApplyTiledLayout(session)
+	_ = zellij.ApplyTiledLayout(session)
 
 	requirePaneActivity(t, pane1)
 
@@ -247,7 +247,7 @@ func TestStatusIgnoresANSISequences(t *testing.T) {
 
 	_, paneID := createSessionWithTitle(t, logger, "cc_1")
 
-	if err := tmux.SendKeys(paneID, "printf \"\\033[31mHTTP 429 rate limit\\033[0m\\n$ \"", true); err != nil {
+	if err := zellij.SendKeys(paneID, "printf \"\\033[31mHTTP 429 rate limit\\033[0m\\n$ \"", true); err != nil {
 		t.Fatalf("failed to write colored error output: %v", err)
 	}
 	time.Sleep(150 * time.Millisecond)
@@ -270,16 +270,16 @@ func createSessionWithTitle(t *testing.T, logger *testutil.TestLogger, titleSuff
 	session := fmt.Sprintf("ntm_status_%d", time.Now().UnixNano())
 	logger.Log("Creating tmux session %s", session)
 
-	if err := tmux.CreateSession(session, t.TempDir()); err != nil {
+	if err := zellij.CreateSession(session, t.TempDir()); err != nil {
 		t.Skipf("tmux not available: %v", err)
 	}
 
 	t.Cleanup(func() {
 		logger.Log("Killing tmux session %s", session)
-		_ = tmux.KillSession(session)
+		_ = zellij.KillSession(session)
 	})
 
-	panes, err := tmux.GetPanesWithActivity(session)
+	panes, err := zellij.GetPanesWithActivity(session)
 	if err != nil {
 		t.Fatalf("failed to list panes: %v", err)
 	}
@@ -289,7 +289,7 @@ func createSessionWithTitle(t *testing.T, logger *testutil.TestLogger, titleSuff
 
 	paneID := panes[0].Pane.ID
 	title := fmt.Sprintf("%s__%s", session, titleSuffix)
-	if err := tmux.SetPaneTitle(paneID, title); err != nil {
+	if err := zellij.SetPaneTitle(paneID, title); err != nil {
 		t.Fatalf("failed to set pane title: %v", err)
 	}
 
@@ -299,7 +299,7 @@ func createSessionWithTitle(t *testing.T, logger *testutil.TestLogger, titleSuff
 func requirePaneActivity(t *testing.T, paneID string) {
 	t.Helper()
 
-	if _, err := tmux.GetPaneActivity(paneID); err != nil {
+	if _, err := zellij.GetPaneActivity(paneID); err != nil {
 		t.Skipf("tmux pane_last_activity unavailable: %v", err)
 	}
 }

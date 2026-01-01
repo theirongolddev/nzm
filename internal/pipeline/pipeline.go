@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/status"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // Stage represents a step in the pipeline
@@ -40,7 +40,7 @@ func Execute(ctx context.Context, p Pipeline) error {
 		}
 
 		// Capture state BEFORE sending prompt to isolate the new response later
-		beforeOutput, err := tmux.CapturePaneOutput(paneID, 2000)
+		beforeOutput, err := zellij.CapturePaneOutput(paneID, 2000)
 		if err != nil {
 			// Non-fatal, just means we might capture too much context
 			beforeOutput = ""
@@ -60,7 +60,7 @@ func Execute(ctx context.Context, p Pipeline) error {
 		}
 
 		// 3. Send prompt
-		if err := tmux.PasteKeys(paneID, prompt, true); err != nil {
+		if err := zellij.PasteKeys(paneID, prompt, true); err != nil {
 			return fmt.Errorf("stage %d sending prompt: %w", i+1, err)
 		}
 
@@ -77,7 +77,7 @@ func Execute(ctx context.Context, p Pipeline) error {
 		// 6. Capture output
 		// We capture a larger buffer to ensure we get the full response.
 		// 2000 lines should cover most responses without being excessive.
-		afterOutput, err := tmux.CapturePaneOutput(paneID, 2000)
+		afterOutput, err := zellij.CapturePaneOutput(paneID, 2000)
 		if err != nil {
 			return fmt.Errorf("stage %d capturing output: %w", i+1, err)
 		}
@@ -142,7 +142,7 @@ func extractNewOutput(before, after string) string {
 
 func findPaneForStage(session, agentType, model string) (string, error) {
 	targetType := normalizeAgentType(agentType)
-	panes, err := tmux.GetPanes(session)
+	panes, err := zellij.GetPanes(session)
 	if err != nil {
 		return "", err
 	}

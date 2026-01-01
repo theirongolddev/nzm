@@ -12,7 +12,7 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/alerts"
 	"github.com/Dicklesworthstone/ntm/internal/bv"
 	"github.com/Dicklesworthstone/ntm/internal/config"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // MarkdownOptions configures markdown output generation.
@@ -100,7 +100,7 @@ func PrintMarkdownCompact(cfg *config.Config) error {
 
 // writeSessionsMarkdown writes the sessions section.
 func writeSessionsMarkdown(sb *strings.Builder, opts MarkdownOptions) {
-	sessions, err := tmux.ListSessions()
+	sessions, err := zellij.ListSessions()
 	if err != nil || len(sessions) == 0 {
 		if opts.Compact {
 			sb.WriteString("### Sessions: none\n\n")
@@ -112,7 +112,7 @@ func writeSessionsMarkdown(sb *strings.Builder, opts MarkdownOptions) {
 
 	// Filter by session if specified
 	if opts.Session != "" {
-		filtered := make([]tmux.Session, 0)
+		filtered := make([]zellij.Session, 0)
 		for _, s := range sessions {
 			if s.Name == opts.Session {
 				filtered = append(filtered, s)
@@ -131,7 +131,7 @@ func writeSessionsMarkdown(sb *strings.Builder, opts MarkdownOptions) {
 	if opts.Compact {
 		// Ultra-compact: one line per session
 		for _, sess := range sessions {
-			panes, _ := tmux.GetPanes(sess.Name)
+			panes, _ := zellij.GetPanes(sess.Name)
 			counts := countAgentsByType(panes)
 			attached := ""
 			if sess.Attached {
@@ -146,7 +146,7 @@ func writeSessionsMarkdown(sb *strings.Builder, opts MarkdownOptions) {
 		sb.WriteString("|---------|----------|--------|--------|-------|--------|---------|------|-------|\n")
 
 		for _, sess := range sessions {
-			panes, _ := tmux.GetPanes(sess.Name)
+			panes, _ := zellij.GetPanes(sess.Name)
 			counts := countAgentsByType(panes)
 			states := countAgentsByState(panes)
 
@@ -165,7 +165,7 @@ func writeSessionsMarkdown(sb *strings.Builder, opts MarkdownOptions) {
 }
 
 // countAgentsByType counts agents by type from panes.
-func countAgentsByType(panes []tmux.Pane) map[string]int {
+func countAgentsByType(panes []zellij.Pane) map[string]int {
 	counts := map[string]int{
 		"claude": 0,
 		"codex":  0,
@@ -176,13 +176,13 @@ func countAgentsByType(panes []tmux.Pane) map[string]int {
 
 	for _, pane := range panes {
 		switch pane.Type {
-		case tmux.AgentClaude:
+		case zellij.AgentClaude:
 			counts["claude"]++
-		case tmux.AgentCodex:
+		case zellij.AgentCodex:
 			counts["codex"]++
-		case tmux.AgentGemini:
+		case zellij.AgentGemini:
 			counts["gemini"]++
-		case tmux.AgentUser:
+		case zellij.AgentUser:
 			counts["user"]++
 		default:
 			counts["other"]++
@@ -192,7 +192,7 @@ func countAgentsByType(panes []tmux.Pane) map[string]int {
 }
 
 // countAgentsByState counts agents by state (working/idle/error).
-func countAgentsByState(panes []tmux.Pane) map[string]int {
+func countAgentsByState(panes []zellij.Pane) map[string]int {
 	counts := map[string]int{
 		"working": 0,
 		"idle":    0,
@@ -202,12 +202,12 @@ func countAgentsByState(panes []tmux.Pane) map[string]int {
 
 	for _, pane := range panes {
 		// Skip user panes
-		if pane.Type == tmux.AgentUser {
+		if pane.Type == zellij.AgentUser {
 			continue
 		}
 
 		// Capture output to detect state
-		captured, err := tmux.CapturePaneOutput(pane.ID, 20)
+		captured, err := zellij.CapturePaneOutput(pane.ID, 20)
 		if err != nil {
 			counts["unknown"]++
 			continue

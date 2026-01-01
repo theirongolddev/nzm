@@ -6,7 +6,7 @@ package checkpoint
 import (
 	"time"
 
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // Checkpoint represents a saved session state.
@@ -96,8 +96,8 @@ func (c *Checkpoint) HasGitPatch() bool {
 	return c.Git.PatchFile != ""
 }
 
-// FromTmuxPane converts a tmux.Pane to PaneState.
-func FromTmuxPane(p tmux.Pane) PaneState {
+// FromTmuxPane converts a zellij.Pane to PaneState.
+func FromTmuxPane(p zellij.Pane) PaneState {
 	return PaneState{
 		Index:     p.Index,
 		ID:        p.ID,

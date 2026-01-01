@@ -18,7 +18,7 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/output"
 	"github.com/Dicklesworthstone/ntm/internal/persona"
 	"github.com/Dicklesworthstone/ntm/internal/plugins"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // AddOptions configures agent addition
@@ -167,11 +167,11 @@ func runAdd(opts AddOptions) error {
 		return err
 	}
 
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := zellij.EnsureInstalled(); err != nil {
 		return outputError(err)
 	}
 
-	if !tmux.SessionExists(session) {
+	if !zellij.SessionExists(session) {
 		return outputError(fmt.Errorf("session '%s' does not exist (use 'ntm spawn' to create)", session))
 	}
 
@@ -242,7 +242,7 @@ func runAdd(opts AddOptions) error {
 	var newPanes []output.PaneResponse
 
 	// Get existing panes to determine next indices
-	panes, err := tmux.GetPanes(session)
+	panes, err := zellij.GetPanes(session)
 	if err != nil {
 		return outputError(err)
 	}
@@ -297,7 +297,7 @@ func runAdd(opts AddOptions) error {
 	for _, agent := range flatAgents {
 		agentTypeStr := string(agent.Type)
 
-		paneID, err := tmux.SplitWindow(session, dir)
+		paneID, err := zellij.SplitWindow(session, dir)
 		if err != nil {
 			return outputError(fmt.Errorf("creating pane: %w", err))
 		}
@@ -306,8 +306,8 @@ func runAdd(opts AddOptions) error {
 		maxIndices[agentTypeStr]++
 		num := maxIndices[agentTypeStr]
 
-		title := tmux.FormatPaneName(session, agentTypeStr, num, agent.Model)
-		if err := tmux.SetPaneTitle(paneID, title); err != nil {
+		title := zellij.FormatPaneName(session, agentTypeStr, num, agent.Model)
+		if err := zellij.SetPaneTitle(paneID, title); err != nil {
 			return outputError(fmt.Errorf("setting pane title: %w", err))
 		}
 
@@ -380,17 +380,17 @@ func runAdd(opts AddOptions) error {
 			finalCmd = envPrefix + finalCmd
 		}
 
-		safeCmd, err := tmux.SanitizePaneCommand(finalCmd)
+		safeCmd, err := zellij.SanitizePaneCommand(finalCmd)
 		if err != nil {
 			return outputError(fmt.Errorf("invalid agent command: %w", err))
 		}
 
-		cmd, err := tmux.BuildPaneCommand(dir, safeCmd)
+		cmd, err := zellij.BuildPaneCommand(dir, safeCmd)
 		if err != nil {
 			return outputError(fmt.Errorf("building agent command: %w", err))
 		}
 
-		if err := tmux.SendKeys(paneID, cmd, true); err != nil {
+		if err := zellij.SendKeys(paneID, cmd, true); err != nil {
 			return outputError(fmt.Errorf("launching agent: %w", err))
 		}
 
@@ -425,7 +425,7 @@ func runAdd(opts AddOptions) error {
 		if cassContext != "" {
 			// Wait a bit for agent to start
 			time.Sleep(500 * time.Millisecond)
-			if err := tmux.PasteKeys(paneID, cassContext, true); err != nil {
+			if err := zellij.PasteKeys(paneID, cassContext, true); err != nil {
 				if !IsJSONOutput() {
 					fmt.Printf("⚠ Warning: failed to inject context: %v\n", err)
 				}
@@ -435,7 +435,7 @@ func runAdd(opts AddOptions) error {
 		// Inject user prompt if provided
 		if opts.Prompt != "" {
 			time.Sleep(200 * time.Millisecond)
-			if err := tmux.PasteKeys(paneID, opts.Prompt, true); err != nil {
+			if err := zellij.PasteKeys(paneID, opts.Prompt, true); err != nil {
 				if !IsJSONOutput() {
 					fmt.Printf("⚠ Warning: failed to send prompt: %v\n", err)
 				}

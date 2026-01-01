@@ -13,7 +13,7 @@ import (
 
 	"github.com/Dicklesworthstone/ntm/internal/config"
 	"github.com/Dicklesworthstone/ntm/internal/history"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // stripANSI removes ANSI escape sequences from text for test comparison.
@@ -672,7 +672,7 @@ var errTestError = tea.ErrProgramKilled
 // SessionSelector Tests
 // ═══════════════════════════════════════════════════════════════
 
-var testSessions = []tmux.Session{
+var testSessions = []zellij.Session{
 	{Name: "project1", Windows: 2, Attached: false},
 	{Name: "project2", Windows: 3, Attached: true},
 	{Name: "project3", Windows: 1, Attached: false},
@@ -867,7 +867,7 @@ func TestRunSessionSelectorEmpty(t *testing.T) {
 }
 
 func TestRunSessionSelectorSingleSession(t *testing.T) {
-	sessions := []tmux.Session{{Name: "only-one"}}
+	sessions := []zellij.Session{{Name: "only-one"}}
 
 	name, err := RunSessionSelector(sessions)
 

@@ -15,7 +15,7 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/cass"
 	"github.com/Dicklesworthstone/ntm/internal/config"
 	"github.com/Dicklesworthstone/ntm/internal/palette"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // parseEditorCommand splits the editor string into command and arguments.
@@ -90,8 +90,8 @@ func ResolveSessionWithOptions(session string, w io.Writer, opts SessionResolveO
 	}
 
 	// Current tmux session is the most deterministic signal.
-	if tmux.InTmux() {
-		if current := tmux.GetCurrentSession(); current != "" {
+	if zellij.InZellij() {
+		if current := zellij.GetCurrentSession(); current != "" {
 			return SessionResolution{
 				Session:  current,
 				Reason:   "current tmux session",
@@ -100,7 +100,7 @@ func ResolveSessionWithOptions(session string, w io.Writer, opts SessionResolveO
 		}
 	}
 
-	sessionList, err := tmux.ListSessions()
+	sessionList, err := zellij.ListSessions()
 	if err != nil {
 		return SessionResolution{}, err
 	}
@@ -154,9 +154,9 @@ func ResolveSessionWithOptions(session string, w io.Writer, opts SessionResolveO
 	}, nil
 }
 
-func inferSessionFromCWD(sessions []tmux.Session) (string, string) {
+func inferSessionFromCWD(sessions []zellij.Session) (string, string) {
 	// Avoid local-path heuristics when operating against a remote tmux server.
-	if strings.TrimSpace(tmux.DefaultClient.Remote) != "" {
+	if strings.TrimSpace(zellij.DefaultClient.Remote) != "" {
 		return "", ""
 	}
 
@@ -209,11 +209,11 @@ func inferSessionFromCWD(sessions []tmux.Session) (string, string) {
 	return "", ""
 }
 
-func orderSessionsForSelection(sessions []tmux.Session) []tmux.Session {
-	ordered := make([]tmux.Session, len(sessions))
+func orderSessionsForSelection(sessions []zellij.Session) []zellij.Session {
+	ordered := make([]zellij.Session, len(sessions))
 	copy(ordered, sessions)
 
-	// Prefer attached sessions when outside tmux.
+	// Prefer attached sessions when outside zellij.
 	sort.SliceStable(ordered, func(i, j int) bool {
 		if ordered[i].Attached != ordered[j].Attached {
 			return ordered[i].Attached

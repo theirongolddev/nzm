@@ -8,13 +8,13 @@ import (
 	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/config"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 func TestSpawnSessionLogic(t *testing.T) {
 	// Skip if tmux is not installed (Epic says "Tests requiring tmux must be skipped in CI without tmux")
-	if !tmux.IsInstalled() {
-		t.Skip("tmux not installed")
+	if !zellij.IsInstalled() {
+		t.Skip("zellij not installed")
 	}
 
 	// Setup temp dir for projects
@@ -47,7 +47,7 @@ func TestSpawnSessionLogic(t *testing.T) {
 
 	// Clean up session after test
 	defer func() {
-		_ = tmux.KillSession(sessionName)
+		_ = zellij.KillSession(sessionName)
 	}()
 
 	// Define agents
@@ -74,13 +74,13 @@ func TestSpawnSessionLogic(t *testing.T) {
 	}
 
 	// Validate session exists
-	if !tmux.SessionExists(sessionName) {
+	if !zellij.SessionExists(sessionName) {
 		t.Errorf("session %s was not created", sessionName)
 	}
 
 	// Validate panes
 	// Expected: 1 user pane + 1 claude pane = 2 panes
-	panes, err := tmux.GetPanes(sessionName)
+	panes, err := zellij.GetPanes(sessionName)
 	if err != nil {
 		t.Fatalf("failed to get panes: %v", err)
 	}
@@ -92,7 +92,7 @@ func TestSpawnSessionLogic(t *testing.T) {
 	// Validate user pane and agent pane
 	foundClaude := false
 	for _, p := range panes {
-		if p.Type == tmux.AgentClaude {
+		if p.Type == zellij.AgentClaude {
 			foundClaude = true
 			// Check title format: session__type_index_variant
 			expectedTitle := fmt.Sprintf("%s__cc_1_claude-3-5-sonnet-20241022", sessionName)

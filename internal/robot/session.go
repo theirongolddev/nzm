@@ -7,7 +7,7 @@ import (
 	"os"
 
 	"github.com/Dicklesworthstone/ntm/internal/session"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // SaveOptions configures the robot-save operation.
@@ -55,7 +55,7 @@ type RestorePreview struct {
 
 // PrintSave saves a session state and outputs JSON.
 func PrintSave(opts SaveOptions) error {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := zellij.EnsureInstalled(); err != nil {
 		return outputSaveError(opts.Session, err)
 	}
 
@@ -64,7 +64,7 @@ func PrintSave(opts SaveOptions) error {
 		return outputSaveError("", fmt.Errorf("session name is required"))
 	}
 
-	if !tmux.SessionExists(sessionName) {
+	if !zellij.SessionExists(sessionName) {
 		return outputSaveError(sessionName, fmt.Errorf("session '%s' not found", sessionName))
 	}
 
@@ -108,7 +108,7 @@ func PrintSave(opts SaveOptions) error {
 
 // PrintRestore restores a session from saved state and outputs JSON.
 func PrintRestore(opts RestoreOptions) error {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := zellij.EnsureInstalled(); err != nil {
 		return outputRestoreError(opts.SavedName, err)
 	}
 
@@ -136,7 +136,7 @@ func PrintRestore(opts RestoreOptions) error {
 	}
 
 	// Check if session already exists
-	if tmux.SessionExists(state.Name) {
+	if zellij.SessionExists(state.Name) {
 		return outputRestoreError(opts.SavedName, fmt.Errorf("session '%s' already exists (use 'ntm sessions restore' with --force to overwrite)", state.Name))
 	}
 

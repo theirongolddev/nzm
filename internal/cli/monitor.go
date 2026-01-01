@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Dicklesworthstone/ntm/internal/resilience"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 func newMonitorCmd() *cobra.Command {
@@ -34,7 +34,7 @@ func runMonitor(session string) error {
 	}
 
 	// Ensure session exists
-	if !tmux.SessionExists(session) {
+	if !zellij.SessionExists(session) {
 		// If session is gone, clean up and exit
 		_ = resilience.DeleteManifest(session)
 		return nil
@@ -71,7 +71,7 @@ func runMonitor(session string) error {
 			monitor.Stop()
 			return nil
 		case <-ticker.C:
-			if !tmux.SessionExists(session) {
+			if !zellij.SessionExists(session) {
 				fmt.Println("Session ended, stopping monitor...")
 				monitor.Stop()
 				_ = resilience.DeleteManifest(session)

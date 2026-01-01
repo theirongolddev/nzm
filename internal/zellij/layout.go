@@ -2,6 +2,7 @@ package zellij
 
 import (
 	"fmt"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -9,7 +10,9 @@ import (
 
 // LayoutOptions configures session layout generation
 type LayoutOptions struct {
+	SessionName string // Session name (alias for Session)
 	Session     string // Session name
+	ProjectDir  string // Project directory (alias for WorkDir)
 	WorkDir     string // Working directory for panes
 	PluginPath  string // Path to nzm-agent.wasm
 	CCCount     int    // Number of Claude panes
@@ -28,11 +31,21 @@ const DefaultPluginPath = "nzm-agent"
 func GenerateLayout(opts LayoutOptions) (string, error) {
 	var sb strings.Builder
 
+	// Handle aliases
+	session := opts.Session
+	if session == "" {
+		session = opts.SessionName
+	}
+	workDir := opts.WorkDir
+	if workDir == "" {
+		workDir = opts.ProjectDir
+	}
+
 	sb.WriteString("layout {\n")
 
 	// Add default cwd if specified
-	if opts.WorkDir != "" {
-		sb.WriteString(fmt.Sprintf("    cwd %q\n", opts.WorkDir))
+	if workDir != "" {
+		sb.WriteString(fmt.Sprintf("    cwd %q\n", workDir))
 	}
 
 	// Determine plugin path
@@ -55,25 +68,25 @@ func GenerateLayout(opts LayoutOptions) (string, error) {
 
 	// Add Claude panes
 	for i := 1; i <= opts.CCCount; i++ {
-		name := GeneratePaneName(opts.Session, "cc", i)
+		name := GeneratePaneName(session, "cc", i)
 		writePane(&sb, name, opts.ClaudeCmd)
 	}
 
 	// Add Codex panes
 	for i := 1; i <= opts.CodCount; i++ {
-		name := GeneratePaneName(opts.Session, "cod", i)
+		name := GeneratePaneName(session, "cod", i)
 		writePane(&sb, name, opts.CodCmd)
 	}
 
 	// Add Gemini panes
 	for i := 1; i <= opts.GmiCount; i++ {
-		name := GeneratePaneName(opts.Session, "gmi", i)
+		name := GeneratePaneName(session, "gmi", i)
 		writePane(&sb, name, opts.GmiCmd)
 	}
 
 	// Add user pane if requested
 	if opts.IncludeUser {
-		name := GeneratePaneName(opts.Session, "user", 1)
+		name := GeneratePaneName(session, "user", 1)
 		writePane(&sb, name, "")
 	}
 
@@ -86,6 +99,33 @@ func GenerateLayout(opts LayoutOptions) (string, error) {
 	sb.WriteString("}\n")
 
 	return sb.String(), nil
+}
+
+// WriteLayoutFile generates a layout and writes it to a temporary file.
+// Returns the path to the temporary file.
+func WriteLayoutFile(opts LayoutOptions) (string, error) {
+	content, err := GenerateLayout(opts)
+	if err != nil {
+		return "", err
+	}
+
+	tmpFile, err := os.CreateTemp("", "nzm-layout-*.kdl")
+	if err != nil {
+		return "", fmt.Errorf("creating temp layout file: %w", err)
+	}
+
+	if _, err := tmpFile.WriteString(content); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpFile.Name())
+		return "", fmt.Errorf("writing layout file: %w", err)
+	}
+
+	if err := tmpFile.Close(); err != nil {
+		os.Remove(tmpFile.Name())
+		return "", fmt.Errorf("closing layout file: %w", err)
+	}
+
+	return tmpFile.Name(), nil
 }
 
 // writePane writes a pane definition to the string builder

@@ -14,7 +14,7 @@ import (
 
 	"github.com/Dicklesworthstone/ntm/internal/config"
 	"github.com/Dicklesworthstone/ntm/internal/history"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 	"github.com/Dicklesworthstone/ntm/internal/tui/components"
 	"github.com/Dicklesworthstone/ntm/internal/tui/icons"
 	"github.com/Dicklesworthstone/ntm/internal/tui/layout"
@@ -331,7 +331,7 @@ func (m Model) fetchPaneCounts() tea.Cmd {
 			return paneCountsMsg{}
 		}
 
-		panes, err := tmux.GetPanes(session)
+		panes, err := zellij.GetPanes(session)
 		if err != nil {
 			return paneCountsMsg{err: err}
 		}
@@ -349,7 +349,7 @@ func (m Model) fetchPaneCounts() tea.Cmd {
 		}
 
 		for _, p := range panes {
-			if p.Type == tmux.AgentUser {
+			if p.Type == zellij.AgentUser {
 				continue
 			}
 
@@ -361,13 +361,13 @@ func (m Model) fetchPaneCounts() tea.Cmd {
 			counts.totalAgents++
 			addSample(&counts.allSamples, title, maxAllSamples)
 			switch p.Type {
-			case tmux.AgentClaude:
+			case zellij.AgentClaude:
 				counts.claude++
 				addSample(&counts.claudeSamples, title, maxTypeSamples)
-			case tmux.AgentCodex:
+			case zellij.AgentCodex:
 				counts.codex++
 				addSample(&counts.codexSamples, title, maxTypeSamples)
-			case tmux.AgentGemini:
+			case zellij.AgentGemini:
 				counts.gemini++
 				addSample(&counts.geminiSamples, title, maxTypeSamples)
 			}
@@ -717,7 +717,7 @@ func (m *Model) send() (tea.Model, tea.Cmd) {
 		return *m, nil
 	}
 
-	panes, err := tmux.GetPanes(m.session)
+	panes, err := zellij.GetPanes(m.session)
 	if err != nil {
 		m.err = err
 		m.recordHistory(nil, start, err)
@@ -734,17 +734,17 @@ func (m *Model) send() (tea.Model, tea.Cmd) {
 		switch m.target {
 		case TargetAll:
 			// Send to all agent panes
-			shouldSend = p.Type != tmux.AgentUser
+			shouldSend = p.Type != zellij.AgentUser
 		case TargetClaude:
-			shouldSend = p.Type == tmux.AgentClaude
+			shouldSend = p.Type == zellij.AgentClaude
 		case TargetCodex:
-			shouldSend = p.Type == tmux.AgentCodex
+			shouldSend = p.Type == zellij.AgentCodex
 		case TargetGemini:
-			shouldSend = p.Type == tmux.AgentGemini
+			shouldSend = p.Type == zellij.AgentGemini
 		}
 
 		if shouldSend {
-			if err := tmux.PasteKeys(p.ID, prompt, true); err != nil {
+			if err := zellij.PasteKeys(p.ID, prompt, true); err != nil {
 				m.err = err
 				m.recordHistory(targetPanes, start, err)
 				return *m, tea.Quit

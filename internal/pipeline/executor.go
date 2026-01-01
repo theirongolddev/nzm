@@ -17,7 +17,7 @@ import (
 
 	"github.com/Dicklesworthstone/ntm/internal/robot"
 	"github.com/Dicklesworthstone/ntm/internal/status"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // ExecutorConfig configures the executor behavior
@@ -399,10 +399,10 @@ func (e *Executor) executeStepOnce(ctx context.Context, step *Step, workflow *Wo
 	}
 
 	// Capture state before sending
-	beforeOutput, _ := tmux.CapturePaneOutput(paneID, 2000)
+	beforeOutput, _ := zellij.CapturePaneOutput(paneID, 2000)
 
 	// Send prompt
-	if err := tmux.PasteKeys(paneID, prompt, true); err != nil {
+	if err := zellij.PasteKeys(paneID, prompt, true); err != nil {
 		result.Status = StatusFailed
 		result.Error = &StepError{
 			Type:      "send",
@@ -462,7 +462,7 @@ func (e *Executor) executeStepOnce(ctx context.Context, step *Step, workflow *Wo
 	}
 
 	// Capture output
-	afterOutput, err := tmux.CapturePaneOutput(paneID, 2000)
+	afterOutput, err := zellij.CapturePaneOutput(paneID, 2000)
 	if err != nil {
 		result.Status = StatusFailed
 		result.Error = &StepError{
@@ -741,10 +741,10 @@ func (e *Executor) executeParallelStep(ctx context.Context, step *Step, workflow
 	}
 
 	// Capture state before sending
-	beforeOutput, _ := tmux.CapturePaneOutput(paneID, 2000)
+	beforeOutput, _ := zellij.CapturePaneOutput(paneID, 2000)
 
 	// Send prompt
-	if err := tmux.PasteKeys(paneID, prompt, true); err != nil {
+	if err := zellij.PasteKeys(paneID, prompt, true); err != nil {
 		result.Status = StatusFailed
 		result.Error = &StepError{
 			Type:      "send",
@@ -807,7 +807,7 @@ func (e *Executor) executeParallelStep(ctx context.Context, step *Step, workflow
 	}
 
 	// Capture output
-	afterOutput, err := tmux.CapturePaneOutput(paneID, 2000)
+	afterOutput, err := zellij.CapturePaneOutput(paneID, 2000)
 	if err != nil {
 		result.Status = StatusFailed
 		result.Error = &StepError{
@@ -860,7 +860,7 @@ func (e *Executor) selectPaneExcluding(step *Step, usedPanes map[string]bool, pa
 
 	// Explicit pane selection bypasses exclusion
 	if step.Pane > 0 {
-		panes, err := tmux.GetPanes(e.config.Session)
+		panes, err := zellij.GetPanes(e.config.Session)
 		if err != nil {
 			return "", "", fmt.Errorf("failed to get panes: %w", err)
 		}
@@ -942,7 +942,7 @@ func (e *Executor) selectPaneExcluding(step *Step, usedPanes map[string]bool, pa
 func (e *Executor) selectPane(step *Step) (paneID string, agentType string, err error) {
 	// Explicit pane selection
 	if step.Pane > 0 {
-		panes, err := tmux.GetPanes(e.config.Session)
+		panes, err := zellij.GetPanes(e.config.Session)
 		if err != nil {
 			return "", "", fmt.Errorf("failed to get panes: %w", err)
 		}

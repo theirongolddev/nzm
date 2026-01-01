@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
 )
 
@@ -53,7 +53,7 @@ Examples:
 }
 
 func runZoom(w io.Writer, session string, paneIdx int) error {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := zellij.EnsureInstalled(); err != nil {
 		return err
 	}
 
@@ -71,7 +71,7 @@ func runZoom(w io.Writer, session string, paneIdx int) error {
 	res.ExplainIfInferred(os.Stderr)
 	session = res.Session
 
-	if !tmux.SessionExists(session) {
+	if !zellij.SessionExists(session) {
 		return fmt.Errorf("session '%s' not found", session)
 	}
 
@@ -80,7 +80,7 @@ func runZoom(w io.Writer, session string, paneIdx int) error {
 		if !interactive {
 			return fmt.Errorf("non-interactive environment: pane index is required for zoom")
 		}
-		panes, err := tmux.GetPanes(session)
+		panes, err := zellij.GetPanes(session)
 		if err != nil {
 			return err
 		}
@@ -100,7 +100,7 @@ func runZoom(w io.Writer, session string, paneIdx int) error {
 	}
 
 	// Zoom the pane
-	if err := tmux.ZoomPane(session, paneIdx); err != nil {
+	if err := zellij.ZoomPane(session, paneIdx); err != nil {
 		return fmt.Errorf("failed to zoom pane: %w", err)
 	}
 
@@ -108,11 +108,11 @@ func runZoom(w io.Writer, session string, paneIdx int) error {
 		colorize(t.Success), colorize(t.Text), paneIdx, session)
 
 	// Attach or switch to session
-	return tmux.AttachOrSwitch(session)
+	return zellij.AttachOrSwitch(session)
 }
 
 // runPaneSelector shows a simple pane selector and returns the selected pane index
-func runPaneSelector(session string, panes []tmux.Pane) (int, error) {
+func runPaneSelector(session string, panes []zellij.Pane) (int, error) {
 	t := theme.Current()
 
 	if len(panes) == 0 {
@@ -126,13 +126,13 @@ func runPaneSelector(session string, panes []tmux.Pane) (int, error) {
 		typeIcon := ""
 		typeColor := ""
 		switch p.Type {
-		case tmux.AgentClaude:
+		case zellij.AgentClaude:
 			typeIcon = "󰗣"
 			typeColor = fmt.Sprintf("\033[38;2;%s", colorToRGB(t.Claude))
-		case tmux.AgentCodex:
+		case zellij.AgentCodex:
 			typeIcon = ""
 			typeColor = fmt.Sprintf("\033[38;2;%s", colorToRGB(t.Codex))
-		case tmux.AgentGemini:
+		case zellij.AgentGemini:
 			typeIcon = "󰊤"
 			typeColor = fmt.Sprintf("\033[38;2;%s", colorToRGB(t.Gemini))
 		default:

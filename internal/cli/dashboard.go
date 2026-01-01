@@ -8,7 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Dicklesworthstone/ntm/internal/config"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 	"github.com/Dicklesworthstone/ntm/internal/tui/dashboard"
 )
 
@@ -43,7 +43,7 @@ Examples:
 }
 
 func runDashboard(w io.Writer, errW io.Writer, session string) error {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := zellij.EnsureInstalled(); err != nil {
 		return err
 	}
 
@@ -57,7 +57,7 @@ func runDashboard(w io.Writer, errW io.Writer, session string) error {
 	res.ExplainIfInferred(errW)
 	session = res.Session
 
-	if !tmux.SessionExists(session) {
+	if !zellij.SessionExists(session) {
 		return fmt.Errorf("session '%s' not found", session)
 	}
 

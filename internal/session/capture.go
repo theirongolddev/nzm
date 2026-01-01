@@ -6,17 +6,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // Capture captures the current state of a tmux session.
 func Capture(sessionName string) (*SessionState, error) {
-	session, err := tmux.GetSession(sessionName)
+	session, err := zellij.GetSession(sessionName)
 	if err != nil {
 		return nil, err
 	}
 
-	panes, err := tmux.GetPanes(sessionName)
+	panes, err := zellij.GetPanes(sessionName)
 	if err != nil {
 		return nil, err
 	}
@@ -72,17 +72,17 @@ func Capture(sessionName string) (*SessionState, error) {
 }
 
 // countAgents counts agents by type from pane list.
-func countAgents(panes []tmux.Pane) AgentConfig {
+func countAgents(panes []zellij.Pane) AgentConfig {
 	config := AgentConfig{}
 	for _, p := range panes {
 		switch p.Type {
-		case tmux.AgentClaude:
+		case zellij.AgentClaude:
 			config.Claude++
-		case tmux.AgentCodex:
+		case zellij.AgentCodex:
 			config.Codex++
-		case tmux.AgentGemini:
+		case zellij.AgentGemini:
 			config.Gemini++
-		case tmux.AgentUser:
+		case zellij.AgentUser:
 			config.User++
 		}
 	}
@@ -90,7 +90,7 @@ func countAgents(panes []tmux.Pane) AgentConfig {
 }
 
 // mapPaneStates converts tmux panes to PaneState.
-func mapPaneStates(panes []tmux.Pane) []PaneState {
+func mapPaneStates(panes []zellij.Pane) []PaneState {
 	states := make([]PaneState, len(panes))
 	for i, p := range panes {
 		states[i] = PaneState{
@@ -108,21 +108,9 @@ func mapPaneStates(panes []tmux.Pane) []PaneState {
 }
 
 // detectWorkDir attempts to detect the working directory for the session.
-func detectWorkDir(sessionName string, panes []tmux.Pane) string {
-	// Try to get the pane's current path via tmux
-	if len(panes) > 0 {
-		// Use tmux display-message to get the pane path
-		output, err := tmux.DefaultClient.Run("display-message", "-t", panes[0].ID, "-p", "#{pane_current_path}")
-		if err == nil && len(output) > 0 {
-			path := strings.TrimSpace(output)
-			if path != "" {
-				return path
-			}
-		}
-	}
-
-	// Fallback: try to determine from current process working directory
-	// This is often correct if ntm is run from the project root
+func detectWorkDir(sessionName string, panes []zellij.Pane) string {
+	// Zellij doesn't expose pane CWD directly like tmux
+	// Use current process working directory as best guess
 	if cwd, err := os.Getwd(); err == nil {
 		return cwd
 	}
@@ -162,29 +150,8 @@ func getGitInfo(dir string) (branch, remote, commit string) {
 	return branch, remote, commit
 }
 
-// getLayout gets the current tmux layout for the session.
+// getLayout gets the current layout for the session.
 func getLayout(sessionName string) string {
-	output, err := tmux.DefaultClient.Run("display-message", "-t", sessionName, "-p", "#{window_layout}")
-	if err != nil {
-		return "tiled" // Default
-	}
-	// tmux layouts can be complex strings, but we'll use simplified versions
-	layout := strings.TrimSpace(output)
-
-	// Map to simple layout names if possible
-	switch {
-	case strings.HasPrefix(layout, "even-horizontal"):
-		return "even-horizontal"
-	case strings.HasPrefix(layout, "even-vertical"):
-		return "even-vertical"
-	case strings.HasPrefix(layout, "main-horizontal"):
-		return "main-horizontal"
-	case strings.HasPrefix(layout, "main-vertical"):
-		return "main-vertical"
-	case strings.HasPrefix(layout, "tiled"):
-		return "tiled"
-	default:
-		// Return as-is for custom layouts
-		return layout
-	}
+	// Zellij layouts work differently - return default
+	return "tiled"
 }

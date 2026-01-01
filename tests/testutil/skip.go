@@ -13,7 +13,7 @@ import (
 func RequireTmux(t *testing.T) {
 	t.Helper()
 	if _, err := exec.LookPath("tmux"); err != nil {
-		t.Skip("tmux not installed, skipping test")
+		t.Skip("zellij not installed, skipping test")
 	}
 }
 

@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // RouteOptions configures the routing recommendation request.
@@ -109,7 +109,7 @@ func PrintRoute(opts RouteOptions) int {
 	}
 
 	// Check session exists
-	if !tmux.SessionExists(opts.Session) {
+	if !zellij.SessionExists(opts.Session) {
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("session '%s' not found", opts.Session),
 			ErrCodeSessionNotFound,
@@ -120,7 +120,7 @@ func PrintRoute(opts RouteOptions) int {
 	}
 
 	// Get all panes
-	panes, err := tmux.GetPanes(opts.Session)
+	panes, err := zellij.GetPanes(opts.Session)
 	if err != nil {
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("failed to get panes: %w", err),
@@ -329,12 +329,12 @@ func GetRouteRecommendation(opts RouteOptions) (*RouteRecommendation, error) {
 	}
 
 	// Check session exists
-	if !tmux.SessionExists(opts.Session) {
+	if !zellij.SessionExists(opts.Session) {
 		return nil, fmt.Errorf("session '%s' not found", opts.Session)
 	}
 
 	// Get all panes
-	panes, err := tmux.GetPanes(opts.Session)
+	panes, err := zellij.GetPanes(opts.Session)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get panes: %w", err)
 	}

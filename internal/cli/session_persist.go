@@ -9,7 +9,7 @@ import (
 
 	"github.com/Dicklesworthstone/ntm/internal/output"
 	"github.com/Dicklesworthstone/ntm/internal/session"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
 )
 
@@ -115,7 +115,7 @@ func (r *SessionsSaveResult) JSON() interface{} {
 }
 
 func runSessionsSave(sessionName string, opts session.SaveOptions) error {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := zellij.EnsureInstalled(); err != nil {
 		return err
 	}
 
@@ -135,7 +135,7 @@ func runSessionsSave(sessionName string, opts session.SaveOptions) error {
 		sessionName = res.Session
 	}
 
-	if !tmux.SessionExists(sessionName) {
+	if !zellij.SessionExists(sessionName) {
 		result := &SessionsSaveResult{
 			Success: false,
 			Session: sessionName,
@@ -443,7 +443,7 @@ func (r *SessionsRestoreResult) JSON() interface{} {
 }
 
 func runSessionsRestore(savedName string, opts session.RestoreOptions, attach, launchAgents bool) error {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := zellij.EnsureInstalled(); err != nil {
 		return err
 	}
 
@@ -478,7 +478,7 @@ func runSessionsRestore(savedName string, opts session.RestoreOptions, attach, l
 	if !opts.SkipGitCheck && state.GitBranch != "" && state.WorkDir != "" {
 		// The restore function already does the check, but we capture the warning for output
 		// by checking current branch again
-		if _, err := tmux.GetSession(restoredName); err == nil {
+		if _, err := zellij.GetSession(restoredName); err == nil {
 			// Session exists, could check git branch here
 		}
 	}
@@ -517,7 +517,7 @@ func runSessionsRestore(savedName string, opts session.RestoreOptions, attach, l
 
 	// Attach if requested
 	if attach {
-		return tmux.AttachOrSwitch(restoredName)
+		return zellij.AttachOrSwitch(restoredName)
 	}
 
 	return nil

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 	"github.com/Dicklesworthstone/ntm/tests/testutil"
 )
 
@@ -52,7 +52,7 @@ gemini = "/bin/true"
 	testutil.AssertSessionExists(t, logger, session)
 
 	// Discover panes and locate the spawned cc pane.
-	panes, err := tmux.GetPanesWithActivity(session)
+	panes, err := zellij.GetPanesWithActivity(session)
 	if err != nil {
 		t.Fatalf("failed to list panes: %v", err)
 	}
@@ -90,7 +90,7 @@ gemini = "/bin/true"
 	testutil.AssertCommandSuccess(t, logger, "ntm", "send", "--config", configPath, "--no-cass-check", "--no-hooks", session, "--cc=", "echo "+marker)
 
 	testutil.AssertEventually(t, logger, 5*time.Second, 150*time.Millisecond, "cc pane receives send payload", func() bool {
-		out, err := tmux.CapturePaneOutput(ccPaneID, 200)
+		out, err := zellij.CapturePaneOutput(ccPaneID, 200)
 		if err != nil {
 			return false
 		}

@@ -12,7 +12,7 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/auth"
 	"github.com/Dicklesworthstone/ntm/internal/quota"
 	"github.com/Dicklesworthstone/ntm/internal/rotation"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 func newRotateCmd() *cobra.Command {
@@ -38,7 +38,7 @@ Examples:
   ntm rotate myproject --pane=0 --account=backup1@gmail.com`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := tmux.EnsureInstalled(); err != nil {
+			if err := zellij.EnsureInstalled(); err != nil {
 				return err
 			}
 
@@ -66,7 +66,7 @@ Examples:
 			}
 
 			// Get pane info
-			panes, err := tmux.GetPanes(session)
+			panes, err := zellij.GetPanes(session)
 			if err != nil {
 				return fmt.Errorf("getting panes: %w", err)
 			}
@@ -128,29 +128,29 @@ Examples:
 func rotateAllLimited(session, targetAccount string, dryRun bool) error {
 	// 1. Identify limited panes
 	fmt.Printf("Scanning session '%s' for rate-limited panes...\n", session)
-	panes, err := tmux.GetPanes(session)
+	panes, err := zellij.GetPanes(session)
 	if err != nil {
 		return err
 	}
 
-	var limitedPanes []tmux.Pane
+	var limitedPanes []zellij.Pane
 	fetcher := &quota.PTYFetcher{CommandTimeout: 5 * time.Second}
 	ctx := context.Background()
 
 	for _, p := range panes {
 		// Skip user panes
-		if p.Type == tmux.AgentUser {
+		if p.Type == zellij.AgentUser {
 			continue
 		}
 
 		// Check quota
 		var provider quota.Provider
 		switch p.Type {
-		case tmux.AgentClaude:
+		case zellij.AgentClaude:
 			provider = quota.ProviderClaude
-		case tmux.AgentCodex:
+		case zellij.AgentCodex:
 			provider = quota.ProviderCodex
-		case tmux.AgentGemini:
+		case zellij.AgentGemini:
 			provider = quota.ProviderGemini
 		default:
 			continue

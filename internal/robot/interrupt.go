@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // InterruptOutput is the structured output for --robot-interrupt
@@ -83,7 +83,7 @@ func PrintInterrupt(opts InterruptOptions) error {
 		output.Message = truncateMessage(opts.Message)
 	}
 
-	if !tmux.SessionExists(opts.Session) {
+	if !zellij.SessionExists(opts.Session) {
 		output.Failed = append(output.Failed, InterruptError{
 			Pane:   "session",
 			Reason: fmt.Sprintf("session '%s' not found", opts.Session),
@@ -92,7 +92,7 @@ func PrintInterrupt(opts InterruptOptions) error {
 		return encodeJSON(output)
 	}
 
-	panes, err := tmux.GetPanes(opts.Session)
+	panes, err := zellij.GetPanes(opts.Session)
 	if err != nil {
 		output.Failed = append(output.Failed, InterruptError{
 			Pane:   "panes",
@@ -110,7 +110,7 @@ func PrintInterrupt(opts InterruptOptions) error {
 	hasPaneFilter := len(paneFilterMap) > 0
 
 	// Determine which panes to interrupt
-	var targetPanes []tmux.Pane
+	var targetPanes []zellij.Pane
 	for _, pane := range panes {
 		paneKey := fmt.Sprintf("%d", pane.Index)
 
@@ -142,7 +142,7 @@ func PrintInterrupt(opts InterruptOptions) error {
 	for _, pane := range targetPanes {
 		paneKey := fmt.Sprintf("%d", pane.Index)
 
-		captured, err := tmux.CapturePaneOutput(pane.ID, 20)
+		captured, err := zellij.CapturePaneOutput(pane.ID, 20)
 		if err != nil {
 			output.PreviousStates[paneKey] = PaneState{
 				State:      "unknown",
@@ -189,7 +189,7 @@ func PrintInterrupt(opts InterruptOptions) error {
 			continue
 		}
 
-		err := tmux.SendInterrupt(pane.ID)
+		err := zellij.SendInterrupt(pane.ID)
 		if err != nil {
 			output.Failed = append(output.Failed, InterruptError{
 				Pane:   paneKey,
@@ -222,7 +222,7 @@ func PrintInterrupt(opts InterruptOptions) error {
 		for time.Now().Before(deadline) && len(pending) > 0 {
 			for paneKey := range pending {
 				// Find the pane
-				var targetPane *tmux.Pane
+				var targetPane *zellij.Pane
 				for i := range targetPanes {
 					if fmt.Sprintf("%d", targetPanes[i].Index) == paneKey {
 						targetPane = &targetPanes[i]
@@ -236,7 +236,7 @@ func PrintInterrupt(opts InterruptOptions) error {
 				}
 
 				// Check if agent is ready
-				captured, err := tmux.CapturePaneOutput(targetPane.ID, 10)
+				captured, err := zellij.CapturePaneOutput(targetPane.ID, 10)
 				if err != nil {
 					continue
 				}
@@ -276,7 +276,7 @@ func PrintInterrupt(opts InterruptOptions) error {
 
 		for _, paneKey := range output.ReadyForInput {
 			// Find the pane
-			var targetPane *tmux.Pane
+			var targetPane *zellij.Pane
 			for i := range targetPanes {
 				if fmt.Sprintf("%d", targetPanes[i].Index) == paneKey {
 					targetPane = &targetPanes[i]
@@ -285,7 +285,7 @@ func PrintInterrupt(opts InterruptOptions) error {
 			}
 
 			if targetPane != nil {
-				err := tmux.SendKeys(targetPane.ID, opts.Message, true)
+				err := zellij.SendKeys(targetPane.ID, opts.Message, true)
 				if err != nil {
 					output.Failed = append(output.Failed, InterruptError{
 						Pane:   paneKey,

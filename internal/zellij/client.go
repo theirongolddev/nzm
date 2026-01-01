@@ -35,7 +35,8 @@ func (e *realExecutor) Run(ctx context.Context, args ...string) (string, error) 
 
 // Client handles Zellij operations
 type Client struct {
-	exec Executor
+	exec   Executor
+	Remote string // For API compatibility - not actually used by Zellij
 }
 
 // ClientOption configures a Client
@@ -45,6 +46,15 @@ type ClientOption func(*Client)
 func WithExecutor(exec Executor) ClientOption {
 	return func(c *Client) {
 		c.exec = exec
+	}
+}
+
+// WithRemote sets the remote host for SSH-based sessions.
+// Note: Zellij doesn't natively support remote like tmux -L,
+// but this is kept for API compatibility.
+func WithRemote(host string) ClientOption {
+	return func(c *Client) {
+		c.Remote = host
 	}
 }
 
@@ -62,12 +72,17 @@ func NewClient(opts ...ClientOption) *Client {
 // DefaultClient is the default Zellij client
 var DefaultClient = NewClient()
 
-// Run executes a zellij command
+// Run executes a zellij command with context
 func (c *Client) Run(ctx context.Context, args ...string) (string, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	return c.exec.Run(ctx, args...)
+}
+
+// RunContext is an alias for Run (for tmux API compatibility)
+func (c *Client) RunContext(ctx context.Context, args ...string) (string, error) {
+	return c.Run(ctx, args...)
 }
 
 // RunSilent executes a zellij command ignoring output
@@ -76,8 +91,30 @@ func (c *Client) RunSilent(ctx context.Context, args ...string) error {
 	return err
 }
 
+// RunSilentContext is an alias for RunSilent (for tmux API compatibility)
+func (c *Client) RunSilentContext(ctx context.Context, args ...string) error {
+	return c.RunSilent(ctx, args...)
+}
+
 // IsInstalled checks if zellij is available
 func (c *Client) IsInstalled() bool {
 	_, err := exec.LookPath("zellij")
 	return err == nil
+}
+
+// GetRemote returns the remote host (always empty for Zellij - not supported)
+func (c *Client) GetRemote() string {
+	return c.Remote
+}
+
+// ============== Non-context convenience methods for tmux API compatibility ==============
+
+// RunSimple executes a zellij command without context (uses Background)
+func (c *Client) RunSimple(args ...string) (string, error) {
+	return c.Run(context.Background(), args...)
+}
+
+// RunSilentSimple executes a zellij command without context, ignoring output
+func (c *Client) RunSilentSimple(args ...string) error {
+	return c.RunSilent(context.Background(), args...)
 }

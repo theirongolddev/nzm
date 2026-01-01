@@ -17,7 +17,7 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/plugins"
 	"github.com/Dicklesworthstone/ntm/internal/robot"
 	"github.com/Dicklesworthstone/ntm/internal/startup"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 	"github.com/Dicklesworthstone/ntm/internal/util"
 )
 
@@ -38,8 +38,8 @@ var (
 
 var rootCmd = &cobra.Command{
 	Use:   "ntm",
-	Short: "Named Tmux Manager - orchestrate AI coding agents in tmux sessions",
-	Long: `NTM (Named Tmux Manager) helps you create and manage tmux sessions
+	Short: "Named Zellij Manager - orchestrate AI coding agents in Zellij sessions",
+	Long: `NTM (Named Zellij Manager) helps you create and manage Zellij sessions
 with multiple AI coding agents (Claude, Codex, Gemini) in separate panes.
 
 Quick Start:
@@ -56,7 +56,7 @@ Shell Integration:
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Configure remote client if requested
 		if sshHost != "" {
-			tmux.DefaultClient = tmux.NewClient(sshHost)
+			zellij.DefaultClient = zellij.NewClient(zellij.WithRemote(sshHost))
 		}
 
 		// Phase 1: Critical startup (always runs, minimal overhead)
@@ -175,8 +175,8 @@ Shell Integration:
 			sessionName := ""
 			if len(args) > 0 {
 				sessionName = args[0]
-			} else if tmux.IsInstalled() {
-				// Best-effort: infer a session when running inside tmux or when cwd matches
+			} else if zellij.IsInstalled() {
+				// Best-effort: infer a session when running inside Zellij or when cwd matches
 				// a project dir. Robot mode must never prompt.
 				if res, err := ResolveSessionWithOptions("", cmd.OutOrStdout(), SessionResolveOptions{TreatAsJSON: true}); err == nil && res.Session != "" {
 					sessionName = res.Session
@@ -786,7 +786,7 @@ func init() {
 
 	// Robot flags for AI agents - state inspection commands
 	rootCmd.Flags().BoolVar(&robotHelp, "robot-help", false, "Show comprehensive AI agent integration guide with examples (JSON)")
-	rootCmd.Flags().BoolVar(&robotStatus, "robot-status", false, "Get tmux sessions, panes, agent states. Start here. Example: ntm --robot-status")
+	rootCmd.Flags().BoolVar(&robotStatus, "robot-status", false, "Get Zellij sessions, panes, agent states. Start here. Example: ntm --robot-status")
 	rootCmd.Flags().BoolVar(&robotVersion, "robot-version", false, "Get ntm version, commit, build info (JSON). Example: ntm --robot-version")
 	rootCmd.Flags().BoolVar(&robotPlan, "robot-plan", false, "Get bv execution plan with parallelizable tracks (JSON). Example: ntm --robot-plan")
 	rootCmd.Flags().BoolVar(&robotSnapshot, "robot-snapshot", false, "Unified state: sessions + beads + alerts + mail. Use --since for delta. Example: ntm --robot-snapshot")
@@ -1034,7 +1034,7 @@ func init() {
 				if jsonOutput {
 					env["NTM_JSON"] = "1"
 				}
-				if s := tmux.GetCurrentSession(); s != "" {
+				if s := zellij.GetCurrentSession(); s != "" {
 					env["NTM_SESSION"] = s
 				}
 

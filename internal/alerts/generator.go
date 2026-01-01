@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/bv"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // Pre-compiled regexes for performance
@@ -93,7 +93,7 @@ func (g *Generator) GenerateAll() ([]Alert, []string) {
 func (g *Generator) checkAgentStates() ([]Alert, error) {
 	var alerts []Alert
 
-	sessions, err := tmux.ListSessions()
+	sessions, err := zellij.ListSessions()
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +104,7 @@ func (g *Generator) checkAgentStates() ([]Alert, error) {
 			continue
 		}
 
-		panes, err := tmux.GetPanes(sess.Name)
+		panes, err := zellij.GetPanes(sess.Name)
 		if err != nil {
 			// If we can't get panes for a session, log it but don't fail the whole check?
 			// Actually if we can't check panes, we shouldn't resolve alerts for this session.
@@ -117,7 +117,7 @@ func (g *Generator) checkAgentStates() ([]Alert, error) {
 
 		for _, pane := range panes {
 			// Capture pane output for analysis
-			output, err := tmux.CapturePaneOutput(pane.ID, 50)
+			output, err := zellij.CapturePaneOutput(pane.ID, 50)
 			if err != nil {
 				// If we can't capture, the pane may have crashed
 				alerts = append(alerts, Alert{
@@ -155,7 +155,7 @@ func (g *Generator) checkAgentStates() ([]Alert, error) {
 }
 
 // detectErrorState checks pane output for error patterns
-func (g *Generator) detectErrorState(session string, pane tmux.Pane, lines []string) *Alert {
+func (g *Generator) detectErrorState(session string, pane zellij.Pane, lines []string) *Alert {
 	// Check last N lines for patterns
 	checkLines := lines
 	if len(checkLines) > 20 {
@@ -186,7 +186,7 @@ func (g *Generator) detectErrorState(session string, pane tmux.Pane, lines []str
 }
 
 // detectRateLimit checks for rate limiting patterns
-func (g *Generator) detectRateLimit(session string, pane tmux.Pane, lines []string) *Alert {
+func (g *Generator) detectRateLimit(session string, pane zellij.Pane, lines []string) *Alert {
 	checkLines := lines
 	if len(checkLines) > 20 {
 		checkLines = checkLines[len(checkLines)-20:]

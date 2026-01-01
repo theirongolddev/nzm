@@ -9,13 +9,13 @@ import (
 	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/config"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // TestSendRealSession tests sending a prompt to a real tmux session
 func TestSendRealSession(t *testing.T) {
-	if !tmux.IsInstalled() {
-		t.Skip("tmux not installed")
+	if !zellij.IsInstalled() {
+		t.Skip("zellij not installed")
 	}
 
 	// Setup temp dir for projects
@@ -44,7 +44,7 @@ func TestSendRealSession(t *testing.T) {
 
 	sessionName := fmt.Sprintf("ntm-test-send-%d", time.Now().UnixNano())
 	defer func() {
-		_ = tmux.KillSession(sessionName)
+		_ = zellij.KillSession(sessionName)
 	}()
 
 	// Define agents
@@ -96,14 +96,14 @@ func TestSendRealSession(t *testing.T) {
 	// Verify output in pane
 	// We spawned 1 Claude agent, so it should be at index 1 (index 0 is user)
 	// We need to find the pane ID or just use index
-	panes, err := tmux.GetPanes(sessionName)
+	panes, err := zellij.GetPanes(sessionName)
 	if err != nil {
 		t.Fatalf("failed to get panes: %v", err)
 	}
 
-	var agentPane *tmux.Pane
+	var agentPane *zellij.Pane
 	for i := range panes {
-		if panes[i].Type == tmux.AgentClaude {
+		if panes[i].Type == zellij.AgentClaude {
 			agentPane = &panes[i]
 			break
 		}
@@ -113,7 +113,7 @@ func TestSendRealSession(t *testing.T) {
 		t.Fatal("Agent pane not found")
 	}
 
-	output, err := tmux.CapturePaneOutput(agentPane.ID, 10)
+	output, err := zellij.CapturePaneOutput(agentPane.ID, 10)
 	if err != nil {
 		t.Fatalf("CapturePaneOutput failed: %v", err)
 	}

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 	"github.com/Dicklesworthstone/ntm/tests/testutil"
 )
 
@@ -123,7 +123,7 @@ claude = "echo '` + customMarker + `' && sleep 30"
 	logger.Log("Waiting for custom command to execute...")
 
 	// Find the spawned cc pane by title and verify our custom marker appears in its output.
-	panes, err := tmux.GetPanesWithActivity(result.Session)
+	panes, err := zellij.GetPanesWithActivity(result.Session)
 	if err != nil {
 		t.Fatalf("failed to list panes: %v", err)
 	}
@@ -139,7 +139,7 @@ claude = "echo '` + customMarker + `' && sleep 30"
 	}
 
 	testutil.AssertEventually(t, logger, 5*time.Second, 150*time.Millisecond, "cc pane outputs custom marker", func() bool {
-		captured, err := tmux.CapturePaneOutput(ccPaneID, 200)
+		captured, err := zellij.CapturePaneOutput(ccPaneID, 200)
 		if err != nil {
 			return false
 		}

@@ -3,7 +3,7 @@ package robot
 import (
 	"testing"
 
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 func TestDetectFromProcess(t *testing.T) {
@@ -126,35 +126,35 @@ func TestDetectFromNTMTitle(t *testing.T) {
 func TestDetectAgentTypeEnhanced(t *testing.T) {
 	tests := []struct {
 		name       string
-		pane       tmux.Pane
+		pane       zellij.Pane
 		content    string
 		wantType   string
 		wantMethod DetectionMethod
 	}{
 		{
 			name:       "process detection highest priority",
-			pane:       tmux.Pane{Command: "claude-code", Title: "Terminal"},
+			pane:       zellij.Pane{Command: "claude-code", Title: "Terminal"},
 			content:    "random output",
 			wantType:   "claude",
 			wantMethod: MethodProcess,
 		},
 		{
 			name:       "content detection when no process match",
-			pane:       tmux.Pane{Command: "bash", Title: "Terminal"},
+			pane:       zellij.Pane{Command: "bash", Title: "Terminal"},
 			content:    "Claude Code is ready\n>",
 			wantType:   "claude",
 			wantMethod: MethodContent,
 		},
 		{
 			name:       "NTM title detection",
-			pane:       tmux.Pane{Command: "bash", Title: "project__cc_1"},
+			pane:       zellij.Pane{Command: "bash", Title: "project__cc_1"},
 			content:    "",
 			wantType:   "claude",
 			wantMethod: MethodTitle,
 		},
 		{
 			name:       "unknown when nothing matches",
-			pane:       tmux.Pane{Command: "vim", Title: "editor"},
+			pane:       zellij.Pane{Command: "vim", Title: "editor"},
 			content:    "editing file.txt",
 			wantType:   "unknown",
 			wantMethod: MethodUnknown,

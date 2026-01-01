@@ -9,7 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 	"github.com/Dicklesworthstone/ntm/internal/tui/components"
 	"github.com/Dicklesworthstone/ntm/internal/tui/icons"
 	"github.com/Dicklesworthstone/ntm/internal/tui/styles"
@@ -18,7 +18,7 @@ import (
 
 // SessionSelector is a TUI for selecting a tmux session
 type SessionSelector struct {
-	sessions []tmux.Session
+	sessions []zellij.Session
 	cursor   int
 	selected string
 	quitting bool
@@ -77,7 +77,7 @@ var selectorKeys = SessionSelectorKeyMap{
 }
 
 // NewSessionSelector creates a new session selector
-func NewSessionSelector(sessions []tmux.Session) SessionSelector {
+func NewSessionSelector(sessions []zellij.Session) SessionSelector {
 	return SessionSelector{
 		sessions: sessions,
 		width:    60,
@@ -331,7 +331,7 @@ func (s SessionSelector) Selected() string {
 }
 
 // RunSessionSelector runs the session selector and returns the selected session
-func RunSessionSelector(sessions []tmux.Session) (string, error) {
+func RunSessionSelector(sessions []zellij.Session) (string, error) {
 	if len(sessions) == 0 {
 		return "", fmt.Errorf("no sessions available")
 	}

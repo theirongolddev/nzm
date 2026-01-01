@@ -5,16 +5,16 @@ import (
 	"testing"
 
 	"github.com/Dicklesworthstone/ntm/internal/config"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 func TestPrintSpawn(t *testing.T) {
-	if !tmux.IsInstalled() {
-		t.Skip("tmux not installed")
+	if !zellij.IsInstalled() {
+		t.Skip("zellij not installed")
 	}
 
 	// Use mock options that don't actually spawn heavy processes if possible,
-	// but PrintSpawn calls logic that calls tmux.
+	// but PrintSpawn calls logic that calls zellij.
 
 	// We can use a test session name
 	opts := SpawnOptions{
@@ -28,7 +28,7 @@ func TestPrintSpawn(t *testing.T) {
 	cfg.Agents.Claude = "echo test"
 
 	// Clean up potential session
-	defer tmux.KillSession(opts.Session)
+	defer zellij.KillSession(opts.Session)
 
 	output, err := captureStdout(t, func() error { return PrintSpawn(opts, cfg) })
 	if err != nil {
@@ -52,13 +52,13 @@ func TestPrintSpawn(t *testing.T) {
 
 func TestAgentTypeShort(t *testing.T) {
 	tests := []struct {
-		input    tmux.AgentType
+		input    zellij.AgentType
 		expected string
 	}{
-		{tmux.AgentClaude, "cc"},
-		{tmux.AgentCodex, "cod"},
-		{tmux.AgentGemini, "gmi"},
-		{tmux.AgentUser, "user"},
+		{zellij.AgentClaude, "cc"},
+		{zellij.AgentCodex, "cod"},
+		{zellij.AgentGemini, "gmi"},
+		{zellij.AgentUser, "user"},
 	}
 
 	for _, tc := range tests {

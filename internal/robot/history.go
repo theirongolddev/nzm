@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/history"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 	"github.com/Dicklesworthstone/ntm/internal/util"
 )
 
@@ -50,7 +50,7 @@ func PrintHistory(opts HistoryOptions) error {
 	}
 
 	// Verify session exists
-	if !tmux.SessionExists(opts.Session) {
+	if !zellij.SessionExists(opts.Session) {
 		// Session doesn't exist, but we might still have history
 		// history.Exists() checks for global history file
 		if !history.Exists() {

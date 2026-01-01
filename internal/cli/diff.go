@@ -8,7 +8,7 @@ import (
 
 	"github.com/Dicklesworthstone/ntm/internal/codeblock"
 	"github.com/Dicklesworthstone/ntm/internal/output"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 func newDiffCmd() *cobra.Command {
@@ -42,7 +42,7 @@ Examples:
 }
 
 func runDiff(session, pane1ID, pane2ID string, unified, sideBySide, codeOnly bool) error {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := zellij.EnsureInstalled(); err != nil {
 		return err
 	}
 
@@ -57,11 +57,11 @@ func runDiff(session, pane1ID, pane2ID string, unified, sideBySide, codeOnly boo
 	}
 
 	// Capture output (default 1000 lines)
-	out1, err := tmux.CapturePaneOutput(p1.ID, 1000)
+	out1, err := zellij.CapturePaneOutput(p1.ID, 1000)
 	if err != nil {
 		return fmt.Errorf("capturing pane 1: %w", err)
 	}
-	out2, err := tmux.CapturePaneOutput(p2.ID, 1000)
+	out2, err := zellij.CapturePaneOutput(p2.ID, 1000)
 	if err != nil {
 		return fmt.Errorf("capturing pane 2: %w", err)
 	}
@@ -105,8 +105,8 @@ func runDiff(session, pane1ID, pane2ID string, unified, sideBySide, codeOnly boo
 	return nil
 }
 
-func resolvePane(session, idOrName string) (*tmux.Pane, error) {
-	panes, err := tmux.GetPanes(session)
+func resolvePane(session, idOrName string) (*zellij.Pane, error) {
+	panes, err := zellij.GetPanes(session)
 	if err != nil {
 		return nil, err
 	}

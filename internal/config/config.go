@@ -1034,7 +1034,7 @@ func renderTOMLStringArray(values []string) string {
 // Print writes config to a writer in TOML format
 func Print(cfg *Config, w io.Writer) error {
 	// Write a nicely formatted config file
-	fmt.Fprintln(w, "# NTM (Named Tmux Manager) Configuration")
+	fmt.Fprintln(w, "# NTM (Named Zellij Manager) Configuration")
 	fmt.Fprintln(w, "# https://github.com/Dicklesworthstone/ntm")
 	fmt.Fprintln(w)
 

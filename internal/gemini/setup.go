@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/status"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 // SetupConfig configures Gemini post-spawn setup behavior.
@@ -98,7 +98,7 @@ func WaitForReady(ctx context.Context, paneID string, timeout time.Duration, pol
 		case <-ctx.Done():
 			return fmt.Errorf("timeout waiting for Gemini prompt")
 		case <-ticker.C:
-			output, err := tmux.CapturePaneOutput(paneID, 20)
+			output, err := zellij.CapturePaneOutput(paneID, 20)
 			if err != nil {
 				continue
 			}
@@ -137,7 +137,7 @@ func isGeminiReady(output string) bool {
 // SelectProModel sends the /model command and selects the Pro model.
 func SelectProModel(ctx context.Context, paneID string, cfg SetupConfig) error {
 	// Step 1: Send /model command
-	if err := tmux.SendKeys(paneID, "/model", true); err != nil {
+	if err := zellij.SendKeys(paneID, "/model", true); err != nil {
 		return fmt.Errorf("sending /model command: %w", err)
 	}
 
@@ -162,7 +162,7 @@ func SelectProModel(ctx context.Context, paneID string, cfg SetupConfig) error {
 	time.Sleep(100 * time.Millisecond)
 
 	// Step 4: Send Enter to confirm selection
-	if err := tmux.SendKeys(paneID, "", true); err != nil {
+	if err := zellij.SendKeys(paneID, "", true); err != nil {
 		return fmt.Errorf("sending enter to confirm: %w", err)
 	}
 
@@ -170,7 +170,7 @@ func SelectProModel(ctx context.Context, paneID string, cfg SetupConfig) error {
 	time.Sleep(500 * time.Millisecond)
 
 	// Check if Pro model is now selected (verification)
-	output, err := tmux.CapturePaneOutput(paneID, 30)
+	output, err := zellij.CapturePaneOutput(paneID, 30)
 	if err == nil && cfg.Verbose {
 		if isProModelSelected(output) {
 			log.Printf("gemini setup: Pro model selected successfully")
@@ -195,7 +195,7 @@ func waitForModelMenu(ctx context.Context, paneID string, timeout time.Duration,
 		case <-ctx.Done():
 			return fmt.Errorf("timeout waiting for model menu")
 		case <-ticker.C:
-			output, err := tmux.CapturePaneOutput(paneID, 30)
+			output, err := zellij.CapturePaneOutput(paneID, 30)
 			if err != nil {
 				continue
 			}
@@ -231,8 +231,8 @@ func isProModelSelected(output string) bool {
 
 // sendDownArrow sends a down arrow key to the pane.
 func sendDownArrow(paneID string) error {
-	// tmux send-keys Down (or the escape sequence)
-	return tmux.DefaultClient.RunSilent("send-keys", "-t", paneID, "Down")
+	// Send Down arrow key via Zellij
+	return zellij.SendKeys(paneID, "\x1b[B", false) // ESC [ B is Down arrow
 }
 
 // WaitForIdleAfterSetup waits for the Gemini agent to return to idle state

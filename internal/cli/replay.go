@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Dicklesworthstone/ntm/internal/history"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
+	"github.com/Dicklesworthstone/ntm/internal/zellij"
 )
 
 func newReplayCmd() *cobra.Command {
@@ -115,18 +115,18 @@ Examples:
 			}
 
 			// Check session exists
-			if !tmux.SessionExists(session) {
+			if !zellij.SessionExists(session) {
 				return fmt.Errorf("session %q not found", session)
 			}
 
 			// Determine target panes
-			panes, err := tmux.GetPanes(session)
+			panes, err := zellij.GetPanes(session)
 			if err != nil {
 				return fmt.Errorf("getting panes: %w", err)
 			}
 
 			// Filter panes based on flags
-			var targets []tmux.Pane
+			var targets []zellij.Pane
 			noFilter := !targetCC && !targetCod && !targetGmi && !targetAll
 
 			for _, p := range panes {
@@ -137,20 +137,20 @@ Examples:
 
 				if noFilter {
 					// Default: all agent panes (exclude user panes)
-					if p.Type != tmux.AgentUser {
+					if p.Type != zellij.AgentUser {
 						targets = append(targets, p)
 					}
 					continue
 				}
 
 				// Apply specific filters
-				if targetCC && p.Type == tmux.AgentClaude {
+				if targetCC && p.Type == zellij.AgentClaude {
 					targets = append(targets, p)
 				}
-				if targetCod && p.Type == tmux.AgentCodex {
+				if targetCod && p.Type == zellij.AgentCodex {
 					targets = append(targets, p)
 				}
-				if targetGmi && p.Type == tmux.AgentGemini {
+				if targetGmi && p.Type == zellij.AgentGemini {
 					targets = append(targets, p)
 				}
 			}
@@ -162,7 +162,7 @@ Examples:
 			// Send to all targets
 			var targetNames []string
 			for _, p := range targets {
-				if err := tmux.PasteKeys(p.ID, prompt, true); err != nil {
+				if err := zellij.PasteKeys(p.ID, prompt, true); err != nil {
 					return fmt.Errorf("sending to pane %d: %w", p.Index, err)
 				}
 				targetNames = append(targetNames, fmt.Sprintf("%d", p.Index))
